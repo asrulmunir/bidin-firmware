@@ -28,7 +28,8 @@ void board_init(void)
             .enable_internal_pullup = 1,
         },
     };
-    ESP_ERROR_CHECK(i2c_new_master_bus(&i2c_bus_cfg, &i2c_master_bus_handle));
+    i2c_master_bus_handle_t i2c_bus_handle;
+    ESP_ERROR_CHECK(i2c_new_master_bus(&i2c_bus_cfg, &i2c_bus_handle));
     ESP_LOGI(TAG, "I2C initialized");
     
     // Initialize SPI for display
