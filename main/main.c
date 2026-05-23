@@ -63,13 +63,15 @@ static void lcd_fill(uint16_t color)
     // Swap bytes for little-endian
     uint16_t swapped = ((color & 0xFF) << 8) | ((color >> 8) & 0xFF);
     
+    // Set column address (0 to 319 = 0x013F)
     lcd_write_cmd(ILI9341_CASET);
-    lcd_write_data(0); lcd_write_data(0);
-    lcd_write_data(1); lcd_write_data(31);  // 320
+    lcd_write_data(0); lcd_write_data(0);   // Start column: 0
+    lcd_write_data(1); lcd_write_data(0x3F); // End column: 319 (0x013F)
     
+    // Set page address (0 to 239 = 0x00EF)
     lcd_write_cmd(ILI9341_PASET);
-    lcd_write_data(0); lcd_write_data(0);
-    lcd_write_data(0); lcd_write_data(239);  // 240
+    lcd_write_data(0); lcd_write_data(0);   // Start row: 0
+    lcd_write_data(0); lcd_write_data(0xEF); // End row: 239 (0x00EF)
     
     lcd_write_cmd(ILI9341_RAMWR);
     
