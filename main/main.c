@@ -1,6 +1,8 @@
 /*
- * Display Probe Test - Try ALL possible configurations
- * This will test different SPI modes and MADCTL values to find what works
+ * Test FNK0104A Pinout
+ * Different from FNK0104B:
+ * - CS: GPIO34 (not GPIO39)
+ * - DC: GPIO39 (not GPIO45)
  */
 
 #include <stdio.h>
@@ -10,19 +12,17 @@
 #include "driver/spi_master.h"
 #include "esp_log.h"
 
-static const char *TAG = "display_probe";
+static const char *TAG = "pinout_test";
 
-// Pin definitions for FNK0104B
-#define DISPLAY_CS      GPIO_NUM_39
-#define DISPLAY_DC      GPIO_NUM_45
-#define DISPLAY_RESET   GPIO_NUM_46
-#define DISPLAY_SCK     GPIO_NUM_47
-#define DISPLAY_MOSI    GPIO_NUM_48
-#define DISPLAY_BL      GPIO_NUM_15
+// FNK0104A pins (DIFFERENT from FNK0104B!)
+#define DISPLAY_CS      GPIO_NUM_34  // Was GPIO39 for FNK0104B
+#define DISPLAY_DC      GPIO_NUM_39  // Was GPIO45 for FNK0104B
+#define DISPLAY_RESET   GPIO_NUM_46  // Same
+#define DISPLAY_SCK     GPIO_NUM_47  // Same
+#define DISPLAY_MOSI    GPIO_NUM_48  // Same
+#define DISPLAY_BL      GPIO_NUM_15  // Same
 
 #define SPI_HOST SPI2_HOST
-
-// ST7789 commands
 #define ST7789_SWRESET  0x01
 #define ST7789_SLPOUT   0x11
 #define ST7789_NORON    0x13
@@ -53,15 +53,12 @@ static void send_data(uint8_t data)
 static void fill_screen(uint16_t color)
 {
     gpio_set_level(DISPLAY_DC, 1);
-    
-    // Set cursor to 0,0
     send_command(ST7789_CASET);
-    send_data(0); send_data(0); send_data(1); send_data(31);  // 320 pixels
+    send_data(0); send_data(0); send_data(1); send_data(31);
     send_command(ST7789_RASET);
-    send_data(0); send_data(0); send_data(0); send_data(239);  // 240 pixels
+    send_data(0); send_data(0); send_data(0); send_data(239);
     send_command(ST7789_RAMWR);
     
-    // Send color data (swap bytes for little-endian)
     uint16_t swapped = ((color & 0xFF) << 8) | ((color >> 8) & 0xFF);
     uint8_t buffer[256];
     for (int i = 0; i < 256; i += 2) {
@@ -69,85 +66,27 @@ static void fill_screen(uint16_t color)
         buffer[i+1] = swapped & 0xFF;
     }
     
-    for (int i = 0; i < 300; i++) {  // 300 * 256 = 76800 pixels (more than screen)
+    for (int i = 0; i < 300; i++) {
         spi_transaction_t t = {.tx_buffer = buffer, .length = 256 * 8};
         spi_device_polling_transmit(spi_handle, &t);
     }
 }
 
-static bool test_display_config(int spi_mode, uint8_t madctl, const char *config_name)
-{
-    ESP_LOGI(TAG, "Testing: %s (SPI mode %d, MADCTL 0x%02X)", config_name, spi_mode, madctl);
-    
-    // Reinitialize SPI with new mode
-    spi_device_interface_config_t devcfg = {
-        .clock_speed_hz = 10 * 1000 * 1000,  // Slow speed for testing
-        .mode = spi_mode,
-        .spics_io_num = DISPLAY_CS,
-        .queue_size = 1,
-    };
-    
-    if (spi_handle) spi_bus_remove_device(spi_handle);
-    spi_bus_add_device(SPI_HOST, &devcfg, &spi_handle);
-    
-    // Reset display
-    gpio_set_level(DISPLAY_RESET, 0);
-    vTaskDelay(pdMS_TO_TICKS(10));
-    gpio_set_level(DISPLAY_RESET, 1);
-    vTaskDelay(pdMS_TO_TICKS(120));
-    
-    // Init sequence
-    send_command(ST7789_SWRESET);
-    vTaskDelay(pdMS_TO_TICKS(150));
-    
-    send_command(ST7789_SLPOUT);
-    vTaskDelay(pdMS_TO_TICKS(120));
-    
-    send_command(ST7789_MADCTL);
-    send_data(madctl);
-    
-    send_command(ST7789_COLMOD);
-    send_data(0x05);  // 16-bit
-    
-    send_command(ST7789_INVON);
-    send_command(ST7789_NORON);
-    vTaskDelay(pdMS_TO_TICKS(10));
-    
-    send_command(ST7789_DISPON);
-    vTaskDelay(pdMS_TO_TICKS(120));
-    
-    // Turn on backlight
-    gpio_set_level(DISPLAY_BL, 1);
-    
-    // Fill with RED
-    fill_screen(0xF800);  // RED
-    
-    ESP_LOGI(TAG, "Waiting 3 seconds - check if screen is RED...");
-    vTaskDelay(pdMS_TO_TICKS(3000));
-    
-    // Fill with BLACK
-    fill_screen(0x0000);
-    vTaskDelay(pdMS_TO_TICKS(500));
-    
-    return true;
-}
-
 void app_main(void)
 {
-    ESP_LOGI(TAG, "=== DISPLAY PROBE TEST ===");
-    ESP_LOGI(TAG, "Testing ALL SPI modes and MADCTL combinations");
-    ESP_LOGI(TAG, "Watch the screen for RED color!");
+    ESP_LOGI(TAG, "=== Testing FNK0104A Pinout ===");
+    ESP_LOGI(TAG, "CS=GPIO34, DC=GPIO39, RESET=GPIO46");
+    ESP_LOGI(TAG, "If screen shows RED, your board is FNK0104A!");
     
     // Configure GPIO
     gpio_reset_pin(DISPLAY_DC);
     gpio_set_direction(DISPLAY_DC, GPIO_MODE_OUTPUT);
     gpio_reset_pin(DISPLAY_BL);
     gpio_set_direction(DISPLAY_BL, GPIO_MODE_OUTPUT);
-    gpio_set_level(DISPLAY_BL, 0);
     gpio_reset_pin(DISPLAY_RESET);
     gpio_set_direction(DISPLAY_RESET, GPIO_MODE_OUTPUT);
     
-    // Initialize SPI bus
+    // Initialize SPI
     spi_bus_config_t buscfg = {
         .mosi_io_num = DISPLAY_MOSI,
         .miso_io_num = GPIO_NUM_NC,
@@ -158,40 +97,61 @@ void app_main(void)
     };
     spi_bus_initialize(SPI_HOST, &buscfg, SPI_DMA_CH_AUTO);
     
-    vTaskDelay(pdMS_TO_TICKS(1000));
+    spi_device_interface_config_t devcfg = {
+        .clock_speed_hz = 10 * 1000 * 1000,
+        .mode = 0,
+        .spics_io_num = DISPLAY_CS,
+        .queue_size = 1,
+    };
+    spi_bus_add_device(SPI_HOST, &devcfg, &spi_handle);
     
-    // Test matrix: SPI mode × MADCTL
-    // MADCTL values to try:
-    // 0x00 = RGB, no rotation
-    // 0x20 = RGB, 180° rotation  
-    // 0x40 = BGR, no rotation
-    // 0x60 = BGR, 180° rotation
-    // 0x80 = RGB, vertical
-    // 0xA0 = RGB, vertical flip
-    // 0xC0 = BGR, vertical
-    // 0xE0 = BGR, vertical flip
+    vTaskDelay(pdMS_TO_TICKS(500));
     
-    test_display_config(0, 0x00, "Mode0-MADCTL0x00-RGB");
-    test_display_config(0, 0x20, "Mode0-MADCTL0x20-RGB-180");
-    test_display_config(0, 0x40, "Mode0-MADCTL0x40-BGR");
-    test_display_config(0, 0x60, "Mode0-MADCTL0x60-BGR-180");
+    // Reset display
+    ESP_LOGI(TAG, "Resetting display...");
+    gpio_set_level(DISPLAY_RESET, 0);
+    vTaskDelay(pdMS_TO_TICKS(10));
+    gpio_set_level(DISPLAY_RESET, 1);
+    vTaskDelay(pdMS_TO_TICKS(120));
     
-    test_display_config(3, 0x00, "Mode3-MADCTL0x00-RGB");
-    test_display_config(3, 0x20, "Mode3-MADCTL0x20-RGB-180");
-    test_display_config(3, 0x40, "Mode3-MADCTL0x40-BGR");
-    test_display_config(3, 0x60, "Mode3-MADCTL0x60-BGR-180");
+    // Init sequence
+    ESP_LOGI(TAG, "Initializing display...");
+    send_command(ST7789_SWRESET);
+    vTaskDelay(pdMS_TO_TICKS(150));
+    send_command(ST7789_SLPOUT);
+    vTaskDelay(pdMS_TO_TICKS(120));
+    send_command(ST7789_MADCTL);
+    send_data(0x00);
+    send_command(ST7789_COLMOD);
+    send_data(0x05);
+    send_command(ST7789_INVON);
+    send_command(ST7789_NORON);
+    vTaskDelay(pdMS_TO_TICKS(10));
+    send_command(ST7789_DISPON);
+    vTaskDelay(pdMS_TO_TICKS(120));
     
-    ESP_LOGI(TAG, "=== TEST COMPLETE ===");
-    ESP_LOGI(TAG, "If screen NEVER showed RED, issue is:");
-    ESP_LOGI(TAG, "  1. Wrong pinout (check board variant)");
-    ESP_LOGI(TAG, "  2. Display not connected properly");
-    ESP_LOGI(TAG, "  3. Display hardware fault");
+    // Backlight ON
+    gpio_set_level(DISPLAY_BL, 1);
+    ESP_LOGI(TAG, "Backlight ON");
     
-    // Blink backlight to signal end
+    // Fill with RED
+    ESP_LOGI(TAG, "Filling screen with RED...");
+    fill_screen(0xF800);
+    
+    ESP_LOGI(TAG, "Screen should be RED now! Wait 5 seconds...");
+    vTaskDelay(pdMS_TO_TICKS(5000));
+    
+    // Fill with GREEN
+    ESP_LOGI(TAG, "Filling screen with GREEN...");
+    fill_screen(0x07E0);
+    
+    ESP_LOGI(TAG, "Screen should be GREEN now!");
+    
+    // Done - blink backlight
     while (1) {
         gpio_set_level(DISPLAY_BL, 1);
-        vTaskDelay(pdMS_TO_TICKS(200));
+        vTaskDelay(pdMS_TO_TICKS(500));
         gpio_set_level(DISPLAY_BL, 0);
-        vTaskDelay(pdMS_TO_TICKS(200));
+        vTaskDelay(pdMS_TO_TICKS(500));
     }
 }
