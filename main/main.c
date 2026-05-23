@@ -27,6 +27,10 @@ static const char *TAG = "bidin";
 
 void app_main(void)
 {
+    // EARLIEST POSSIBLE LOG - verify we reach app_main
+    printf("### APP_MAIN STARTED ###\n");
+    fflush(stdout);
+    
     ESP_LOGI(TAG, "Bidin Firmware v1.0.0 starting...");
     
     // Initialize NVS (non-volatile storage)
