@@ -128,7 +128,11 @@ static void display_set_cursor(uint16_t x, uint16_t y)
 // Initialize display
 void display_init(void)
 {
-    ESP_LOGI(TAG, "Initializing ST7789 display...");
+    ESP_LOGI(TAG, "=== Starting display initialization ===");
+    
+    ESP_LOGI(TAG, "Configuring GPIO pins...");
+    ESP_LOGI(TAG, "  RESET=GPIO%d, DC=GPIO%d, CS=GPIO%d, BL=GPIO%d",
+             DISPLAY_RESET_PIN, DISPLAY_DC_PIN, DISPLAY_SPI_CS_PIN, DISPLAY_BACKLIGHT_PIN);
     
     // Configure GPIO pins
     gpio_config_t io_conf = {
@@ -140,15 +144,21 @@ void display_init(void)
         .pull_up_en = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
     };
+    
+    ESP_LOGI(TAG, "Calling gpio_config()...");
     gpio_config(&io_conf);
+    ESP_LOGI(TAG, "GPIO configured OK");
     
     // Hardware reset sequence (CRITICAL!)
+    ESP_LOGI(TAG, "Performing hardware reset...");
     gpio_set_level(DISPLAY_RESET_PIN, 0);  // Reset LOW
     vTaskDelay(pdMS_TO_TICKS(10));
     gpio_set_level(DISPLAY_RESET_PIN, 1);  // Reset HIGH
     vTaskDelay(pdMS_TO_TICKS(120));  // Wait for reset to complete
+    ESP_LOGI(TAG, "Reset complete");
     
     // Initialize SPI
+    ESP_LOGI(TAG, "Initializing SPI bus...");
     spi_bus_config_t bus_config = {
         .mosi_io_num = DISPLAY_SPI_MOSI_PIN,
         .miso_io_num = -1,  // Not used
@@ -157,6 +167,14 @@ void display_init(void)
         .quadhd_io_num = -1,
         .max_transfer_sz = DISPLAY_WIDTH * DISPLAY_HEIGHT * 2,
     };
+    
+    ESP_LOGI(TAG, "Calling spi_bus_initialize()...");
+    esp_err_t ret = spi_bus_initialize(SPI_HOST, &bus_config, SPI_DMA_CH_AUTO);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "SPI bus init FAILED: %s", esp_err_to_name(ret));
+        return;
+    }
+    ESP_LOGI(TAG, "SPI bus initialized OK");
     
     spi_device_interface_config_t dev_config = {
         .clock_speed_hz = 24000000,  // 24 MHz
@@ -167,18 +185,14 @@ void display_init(void)
         .post_cb = NULL,
     };
     
-    esp_err_t ret = spi_bus_initialize(SPI_HOST, &bus_config, SPI_DMA_CH_AUTO);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize SPI bus: %s", esp_err_to_name(ret));
-        return;
-    }
-    
+    ESP_LOGI(TAG, "Calling spi_bus_add_device()...");
     ret = spi_bus_add_device(SPI_HOST, &dev_config, &g_spi_handle);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to add SPI device: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "SPI device add FAILED: %s", esp_err_to_name(ret));
         spi_bus_free(SPI_HOST);
         return;
     }
+    ESP_LOGI(TAG, "SPI device added OK, handle=%p", (void*)g_spi_handle);
     
     ESP_LOGI(TAG, "SPI initialized, starting display init sequence...");
     
