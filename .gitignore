@@ -1,0 +1,34 @@
+# ESP-IDF build outputs
+build/
+managed_components/
+
+# SDK configuration
+sdkconfig
+sdkconfig.old
+
+# Compilation database
+compile_commands.json
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Testing
+*.gcov
+*.gcda
+*.gcno
+coverage/
+
+# Logs
+*.log
