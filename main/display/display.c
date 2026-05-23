@@ -178,7 +178,7 @@ void display_init(void)
     
     spi_device_interface_config_t dev_config = {
         .clock_speed_hz = 24000000,  // 24 MHz
-        .mode = 3,  // ST7789 uses SPI mode 3 (CPOL=1, CPHA=1)
+        .mode = 0,  // ST7789 works with SPI mode 0 (CPOL=0, CPHA=0) - verified with xiaozhi official
         .spics_io_num = -1,  // Manual CS control
         .queue_size = 1,
         .pre_cb = NULL,
@@ -196,12 +196,53 @@ void display_init(void)
     
     ESP_LOGI(TAG, "SPI initialized, starting display init sequence...");
     
-    // ST7789 initialization sequence (from datasheet)
+    // ST7789 initialization sequence (from xiaozhi-esp32 official)
     display_command(ST7789_SWRESET);  // Software reset
     vTaskDelay(pdMS_TO_TICKS(150));
     
     display_command(ST7789_SLPOUT);  // Sleep out
     vTaskDelay(pdMS_TO_TICKS(120));
+    
+    // Porch control (extra commands from xiaozhi)
+    display_command(0xB2);
+    display_data(0x0C);
+    display_data(0x0C);
+    display_data(0x00);
+    display_data(0x33);
+    display_data(0x33);
+    
+    // Gate control
+    display_command(0xB7);
+    display_data(0x35);
+    
+    // VCOMS setting
+    display_command(0xBB);
+    display_data(0x19);
+    
+    // Power control 1
+    display_command(0xC0);
+    display_data(0x2C);
+    
+    // Power control 2
+    display_command(0xC2);
+    display_data(0x01);
+    
+    // Power control 3
+    display_command(0xC3);
+    display_data(0x12);
+    
+    // Power control 4
+    display_command(0xC4);
+    display_data(0x20);
+    
+    // VCOM control
+    display_command(0xC6);
+    display_data(0x0F);
+    
+    // Power control A (extra)
+    display_command(0xD0);
+    display_data(0xA4);
+    display_data(0xA1);
     
     // Memory Access Control - RGB, no rotation
     display_command(ST7789_MADCTL);
@@ -211,12 +252,7 @@ void display_init(void)
     display_command(ST7789_COLMOD);
     display_data(0x05);  // 16-bit
     
-    // Frame Rate Control (60 Hz)
-    display_command(ST7789_FRMCTR1);
-    display_data(0x00);
-    display_data(0x14);
-    
-    // Display Inversion ON (ST7789 usually needs this)
+    // Display Inversion ON
     display_command(ST7789_INVON);
     
     // Normal Display Mode ON
