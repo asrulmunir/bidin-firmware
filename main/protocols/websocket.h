@@ -1,13 +1,13 @@
-#include <stdint.h>
-#include <stddef.h>
-#include <stdbool.h>
-
+/*
+ * WebSocket Client for Bidin Hermes Plugin
+ * Minimal implementation - only supports what we need
  */
 
 #ifndef WEBSOCKET_H
 #define WEBSOCKET_H
 
 #include <stdint.h>
+#include <stddef.h>
 #include <stdbool.h>
 
 // Audio frame structure (OPUS encoded)

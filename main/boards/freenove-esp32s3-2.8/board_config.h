@@ -38,9 +38,10 @@
 
 // Speaker - I2S
 #define AUDIO_SPEAKER_BCLK_PIN  GPIO_NUM_16
-#define AUDIO_SPEAKER_LRCK_PIN  GPIO_NUM_15  // Shared with DISPLAY_BACKLIGHT_PIN
+#define AUDIO_SPEAKER_LRCK_PIN  GPIO_NUM_15
 #define AUDIO_SPEAKER_DATA_PIN  GPIO_NUM_14
-#define AUDIO_SPEAKER_MUTE_PIN  GPIO_NUM_22
+// GPIO_NUM_22 not available on all ESP32-S3 boards, use GPIO_47 instead
+#define AUDIO_SPEAKER_MUTE_PIN  GPIO_NUM_47
 
 // Buttons
 #define BOARD_BUTTON_BOOT_PIN   GPIO_NUM_0      // BOOT button (active low)
