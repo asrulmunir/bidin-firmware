@@ -1,3 +1,3 @@
-# Bidin Firmware Components
 dependencies:
-  idf: ">=5.1"
+  espressif/esp_lcd_ili9341: "^1.0.0"
+  idf: ">=5.0"
