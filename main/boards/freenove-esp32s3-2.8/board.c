@@ -22,30 +22,28 @@ void board_init(void)
         .intr_type = GPIO_INTR_DISABLE,
     };
     gpio_config(&button_config);
+    ESP_LOGI(TAG, "Button GPIO configured");
     
-    // Configure display backlight
+    // Configure display backlight ONLY (speaker pins skipped - shared GPIO conflict)
+    // NOTE: GPIO15 is shared between DISPLAY_BACKLIGHT and AUDIO_SPEAKER_LRCK
+    // We configure it here for display; audio driver must not claim it
     gpio_reset_pin(DISPLAY_BACKLIGHT_PIN);
     gpio_set_direction(DISPLAY_BACKLIGHT_PIN, GPIO_MODE_OUTPUT);
-    gpio_set_level(DISPLAY_BACKLIGHT_PIN, 1); // Backlight ON
+    gpio_set_level(DISPLAY_BACKLIGHT_PIN, 0); // Backlight OFF initially
+    ESP_LOGI(TAG, "Backlight configured (GPIO%d)", DISPLAY_BACKLIGHT_PIN);
     
-    // Configure speaker mute
-    gpio_reset_pin(AUDIO_SPEAKER_MUTE_PIN);
-    gpio_set_direction(AUDIO_SPEAKER_MUTE_PIN, GPIO_MODE_OUTPUT);
-    gpio_set_level(AUDIO_SPEAKER_MUTE_PIN, 0); // Speaker UNMUTED
+    // Speaker mute SKIPPED - GPIO conflict with display
+    // gpio_reset_pin(AUDIO_SPEAKER_MUTE_PIN);
+    // gpio_set_direction(AUDIO_SPEAKER_MUTE_PIN, GPIO_MODE_OUTPUT);
+    // gpio_set_level(AUDIO_SPEAKER_MUTE_PIN, 0);
+    ESP_LOGI(TAG, "Speaker mute skipped (shared GPIO)");
     
-    // Initialize I2C (for sensors)
-    i2c_config_t i2c_config = {
-        .mode = I2C_MODE_MASTER,
-        .sda_io_num = I2C_SDA_PIN,
-        .scl_io_num = I2C_SCL_PIN,
-        .sda_pullup_en = GPIO_PULLUP_ENABLE,
-        .scl_pullup_en = GPIO_PULLUP_ENABLE,
-        .master.clk_speed = 100000,
-    };
-    i2c_param_config(I2C_NUM_0, &i2c_config);
-    i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0);
+    // I2C SKIPPED - not needed for basic display/audio
+    // i2c_config_t i2c_config = {...}
+    // i2c_driver_install(...);
+    ESP_LOGI(TAG, "I2C skipped (not needed)");
     
-    ESP_LOGI(TAG, "Board initialization complete");
+    ESP_LOGI(TAG, "✅ Board initialization complete");
 }
 
 bool board_button_pressed(void)
