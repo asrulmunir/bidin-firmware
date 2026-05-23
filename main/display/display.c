@@ -75,7 +75,9 @@ static uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b)
 // Helper: Send command to display
 static void display_command(uint8_t cmd)
 {
-    gpio_set_level(DISPLAY_DC_PIN, 0);  // Command mode
+    ESP_LOGV(TAG, "CMD: 0x%02X", cmd);
+    
+    gpio_set_level(DISPLAY_DC_PIN, 0);  // Command mode (DC LOW)
     gpio_set_level(DISPLAY_SPI_CS_PIN, 0);  // Select
     
     spi_transaction_t t = {
@@ -83,7 +85,10 @@ static void display_command(uint8_t cmd)
         .length = 8,
         .tx_data[0] = cmd,
     };
-    spi_device_polling_transmit(g_spi_handle, &t);
+    esp_err_t ret = spi_device_polling_transmit(g_spi_handle, &t);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "SPI command transmit FAILED: %s", esp_err_to_name(ret));
+    }
     
     gpio_set_level(DISPLAY_SPI_CS_PIN, 1);  // Deselect
 }
@@ -91,7 +96,9 @@ static void display_command(uint8_t cmd)
 // Helper: Send data to display
 static void display_data(uint8_t data)
 {
-    gpio_set_level(DISPLAY_DC_PIN, 1);  // Data mode
+    ESP_LOGV(TAG, "DATA: 0x%02X", data);
+    
+    gpio_set_level(DISPLAY_DC_PIN, 1);  // Data mode (DC HIGH)
     gpio_set_level(DISPLAY_SPI_CS_PIN, 0);  // Select
     
     spi_transaction_t t = {
@@ -99,7 +106,10 @@ static void display_data(uint8_t data)
         .length = 8,
         .tx_data[0] = data,
     };
-    spi_device_polling_transmit(g_spi_handle, &t);
+    esp_err_t ret = spi_device_polling_transmit(g_spi_handle, &t);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "SPI data transmit FAILED: %s", esp_err_to_name(ret));
+    }
     
     gpio_set_level(DISPLAY_SPI_CS_PIN, 1);  // Deselect
 }
@@ -427,37 +437,44 @@ void display_fill_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t 
     gpio_set_level(DISPLAY_SPI_CS_PIN, 1);  // Deselect
 }
 
-// Show boot screen
+// Show boot screen - SIMPLIFIED TEST
 void display_show_boot_screen(void)
 {
     if (!g_initialized) return;
     
-    ESP_LOGI(TAG, "Showing boot screen");
+    ESP_LOGI(TAG, "=== DISPLAY TEST START ===");
     
-    // TEST 1: Fill with RED first (verify pixels working)
-    ESP_LOGI(TAG, "Filling screen with RED...");
+    // TEST 1: Direct SPI write test - send single red pixel
+    ESP_LOGI(TAG, "TEST 1: Direct pixel write...");
+    
+    // Set cursor to center (160, 120)
+    display_set_cursor(160, 120);
+    
+    // Send ONE red pixel directly
+    gpio_set_level(DISPLAY_DC_PIN, 1);  // Data mode
+    gpio_set_level(DISPLAY_SPI_CS_PIN, 0);
+    
+    uint8_t pixel_data[2];
+    pixel_data[0] = 0xF8;  // Red high byte (RGB565: 11111 000 000)
+    pixel_data[1] = 0x00;  // Red low byte
+    
+    spi_transaction_t t = {
+        .tx_buffer = pixel_data,
+        .length = 16,
+    };
+    esp_err_t ret = spi_device_polling_transmit(g_spi_handle, &t);
+    ESP_LOGI(TAG, "SPI transmit returned: %d (%s)", ret, ret == ESP_OK ? "OK" : "FAIL");
+    
+    gpio_set_level(DISPLAY_SPI_CS_PIN, 1);
+    
+    vTaskDelay(pdMS_TO_TICKS(3000));  // Wait 3 seconds
+    
+    // TEST 2: Fill entire screen with RED using bulk transfer
+    ESP_LOGI(TAG, "TEST 2: Full screen RED fill...");
     display_fill(COLOR_RED);
-    vTaskDelay(pdMS_TO_TICKS(2000));  // Wait 2 seconds
+    vTaskDelay(pdMS_TO_TICKS(3000));
     
-    // TEST 2: Fill with GREEN
-    ESP_LOGI(TAG, "Filling screen with GREEN...");
-    display_fill(COLOR_GREEN);
-    vTaskDelay(pdMS_TO_TICKS(2000));
-    
-    // TEST 3: Fill with BLUE
-    ESP_LOGI(TAG, "Filling screen with BLUE...");
-    display_fill(COLOR_BLUE);
-    vTaskDelay(pdMS_TO_TICKS(2000));
-    
-    // TEST 4: Draw white rectangle
-    ESP_LOGI(TAG, "Drawing white rectangle...");
-    display_fill(COLOR_BLACK);
-    display_fill_rect(50, 50, 220, 140, COLOR_WHITE);
-    vTaskDelay(pdMS_TO_TICKS(2000));
-    
-    // TEST 5: Draw text
-    ESP_LOGI(TAG, "Drawing text...");
-    display_draw_string(60, 110, "Bidin", COLOR_RED);
+    ESP_LOGI(TAG, "=== DISPLAY TEST END ===");
 }
 
 // Show listening screen
