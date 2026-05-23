@@ -134,17 +134,19 @@ void display_init(void)
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << DISPLAY_DC_PIN) | 
                         (1ULL << DISPLAY_BACKLIGHT_PIN) |
-                        (1ULL << DISPLAY_SPI_CS_PIN),
+                        (1ULL << DISPLAY_SPI_CS_PIN) |
+                        (1ULL << DISPLAY_RESET_PIN),
         .mode = GPIO_MODE_OUTPUT,
         .pull_up_en = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
     };
     gpio_config(&io_conf);
     
-    // Reset display
-    gpio_set_level(DISPLAY_SPI_CS_PIN, 1);
-    gpio_set_level(DISPLAY_DC_PIN, 1);
+    // Hardware reset sequence (CRITICAL!)
+    gpio_set_level(DISPLAY_RESET_PIN, 0);  // Reset LOW
     vTaskDelay(pdMS_TO_TICKS(10));
+    gpio_set_level(DISPLAY_RESET_PIN, 1);  // Reset HIGH
+    vTaskDelay(pdMS_TO_TICKS(120));  // Wait for reset to complete
     
     // Initialize SPI
     spi_bus_config_t bus_config = {
@@ -157,10 +159,12 @@ void display_init(void)
     };
     
     spi_device_interface_config_t dev_config = {
-        .clock_speed_hz = SPI_CLOCK_SPEED_HZ,
-        .mode = 3,  // ST7789 uses SPI mode 3
+        .clock_speed_hz = 24000000,  // 24 MHz
+        .mode = 3,  // ST7789 uses SPI mode 3 (CPOL=1, CPHA=1)
         .spics_io_num = -1,  // Manual CS control
         .queue_size = 1,
+        .pre_cb = NULL,
+        .post_cb = NULL,
     };
     
     esp_err_t ret = spi_bus_initialize(SPI_HOST, &bus_config, SPI_DMA_CH_AUTO);
@@ -172,36 +176,33 @@ void display_init(void)
     ret = spi_bus_add_device(SPI_HOST, &dev_config, &g_spi_handle);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to add SPI device: %s", esp_err_to_name(ret));
+        spi_bus_free(SPI_HOST);
         return;
     }
     
-    // Hardware reset
-    gpio_set_level(DISPLAY_SPI_CS_PIN, 0);
-    vTaskDelay(pdMS_TO_TICKS(10));
-    gpio_set_level(DISPLAY_SPI_CS_PIN, 1);
-    vTaskDelay(pdMS_TO_TICKS(100));
+    ESP_LOGI(TAG, "SPI initialized, starting display init sequence...");
     
-    // ST7789 initialization sequence
-    display_command(ST7789_SWRESET);
+    // ST7789 initialization sequence (from datasheet)
+    display_command(ST7789_SWRESET);  // Software reset
     vTaskDelay(pdMS_TO_TICKS(150));
     
-    display_command(ST7789_SLPOUT);
+    display_command(ST7789_SLPOUT);  // Sleep out
     vTaskDelay(pdMS_TO_TICKS(120));
     
     // Memory Access Control - RGB, no rotation
     display_command(ST7789_MADCTL);
-    display_data(MADCTL_MX | MADCTL_MY | MADCTL_RGB);
+    display_data(0x00);  // RGB, no rotation
     
     // Color Mode: 16-bit (RGB565)
     display_command(ST7789_COLMOD);
     display_data(0x05);  // 16-bit
     
-    // Frame Rate Control
+    // Frame Rate Control (60 Hz)
     display_command(ST7789_FRMCTR1);
     display_data(0x00);
-    display_data(0x14);  // 70 Hz
+    display_data(0x14);
     
-    // Display Inversion ON
+    // Display Inversion ON (ST7789 usually needs this)
     display_command(ST7789_INVON);
     
     // Normal Display Mode ON
@@ -212,14 +213,15 @@ void display_init(void)
     display_command(ST7789_DISPON);
     vTaskDelay(pdMS_TO_TICKS(120));
     
-    // Turn on backlight
+    // Turn on backlight (MUST DO LAST!)
     gpio_set_level(DISPLAY_BACKLIGHT_PIN, 1);
+    ESP_LOGI(TAG, "Backlight ON");
     
     // Clear screen to black
     display_fill(COLOR_BLACK);
     
     g_initialized = true;
-    ESP_LOGI(TAG, "Display initialized successfully");
+    ESP_LOGI(TAG, "✅ Display initialized successfully!");
 }
 
 // Fill screen with color

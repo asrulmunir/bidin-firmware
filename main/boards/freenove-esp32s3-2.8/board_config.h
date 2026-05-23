@@ -15,16 +15,19 @@
 #define BOARD_DISPLAY_TYPE "ST7789"
 #define BOARD_HAS_TOUCH
 
-// GPIO Pin Definitions - NO CONFLICTS!
-// Each GPIO used only ONCE
+// GPIO Pin Definitions - Official Freenove FNK0104B
+// NOTE: Some pins are shared between display and audio (hardware design)
+// - GPIO15: DISPLAY_BACKLIGHT + AUDIO_SPEAKER_LRCK
+// - GPIO47: DISPLAY_SPI_SCK + AUDIO_SPEAKER_MUTE
+// Solution: Initialize display first, keep speaker muted during display ops
 
 // Display (SPI)
 #define DISPLAY_SPI_SCK_PIN     GPIO_NUM_47
 #define DISPLAY_SPI_MOSI_PIN    GPIO_NUM_48
-#define DISPLAY_SPI_CS_PIN      GPIO_NUM_39  // Unique SPI CS
+#define DISPLAY_SPI_CS_PIN      GPIO_NUM_39
 #define DISPLAY_DC_PIN          GPIO_NUM_45
-#define DISPLAY_RESET_PIN       GPIO_NUM_21
-#define DISPLAY_BACKLIGHT_PIN   GPIO_NUM_38  // PWM backlight
+#define DISPLAY_RESET_PIN       GPIO_NUM_46  // CRITICAL: GPIO46, NOT GPIO21!
+#define DISPLAY_BACKLIGHT_PIN   GPIO_NUM_15  // Shared with speaker LRCK
 
 // Touch (XPT2046 via SPI)
 #define TOUCH_SPI_SCK_PIN       DISPLAY_SPI_SCK_PIN  // Shared SCK OK
