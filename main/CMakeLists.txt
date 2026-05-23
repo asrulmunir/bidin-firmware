@@ -3,6 +3,9 @@ idf_component_register(
         "main.c"
         "boards/freenove-esp32s3-2.8/board.c"
         "protocols/websocket.c"
+        "audio/audio.c"
+        "display/display.c"
+        "network/wifi.c"
     INCLUDE_DIRS
         "."
         "boards/freenove-esp32s3-2.8"
