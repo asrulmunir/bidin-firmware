@@ -16,8 +16,8 @@ idf_component_register(
     REQUIRES
         driver
         esp_wifi
-        esp_http_client
         nvs_flash
         json
         esp_netif
+        esp_websocket_client
 )

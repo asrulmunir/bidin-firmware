@@ -1,10 +1,7 @@
-# Bidin Firmware - Minimal Voice Assistant for ESP32-S3
-# Target: Freenove ESP32-S3 Display 2.8"
+# Bidin Firmware Components
+# ESP-IDF Component Manager
 
-{
-  "name": "bidin-firmware",
-  "version": "1.0.0",
-  "description": "Minimal voice assistant firmware for ESP32-S3 - connects to Hermes plugin",
-  "url": "https://github.com/bidin/bidin-firmware",
-  "license": "MIT"
-}
+dependencies:
+  idf: ">=5.1"
+  # WebSocket client with proper transport
+  espressif/esp_websocket_client: "^1.2.0"
