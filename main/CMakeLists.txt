@@ -5,6 +5,7 @@ idf_component_register(
         "."
     REQUIRES
         driver
+        esp_lcd
         esp_http_client
         freertos
         nvs_flash
