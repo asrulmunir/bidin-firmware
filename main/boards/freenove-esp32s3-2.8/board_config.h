@@ -43,6 +43,11 @@
 // GPIO_NUM_22 not available on all ESP32-S3 boards, use GPIO_47 instead
 #define AUDIO_SPEAKER_MUTE_PIN  GPIO_NUM_47
 
+// Board identification
+#define BOARD_DEVICE_NAME "Bidin-ESP32S3"
+#define BOARD_DEVICE_MODEL "Freenove-ESP32S3-2.8"
+#define BOARD_FIRMWARE_VERSION "1.0.0"
+
 // Buttons
 #define BOARD_BUTTON_BOOT_PIN   GPIO_NUM_0      // BOOT button (active low)
 #define BOARD_BUTTON_TOUCH_PIN  GPIO_NUM_21     // Touch sensor (if available)

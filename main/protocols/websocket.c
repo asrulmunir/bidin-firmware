@@ -1,11 +1,11 @@
 /*
  * WebSocket Client for Bidin Hermes Plugin
- * Minimal implementation using esp_http_client with WebSocket transport
+ * Minimal implementation using esp_http_client
  */
 
 #include "websocket.h"
 #include "board_config.h"
-#include "audio.h"  // For audio_frame_t definition
+#include "audio.h"
 #include "esp_log.h"
 #include "esp_http_client.h"
 #include "cJSON.h"
@@ -14,29 +14,27 @@
 
 static const char *TAG = "websocket";
 
-// Server configuration
-#define WEBSOCKET_URL CONFIG_BIDIN_WEBSOCKET_URL
+// Server configuration - hardcoded for now
+#define WEBSOCKET_URL "ws://hermes.tetupai.com:8000/bidin/v1/"
 
 // WebSocket state
 static bool g_connected = false;
 static esp_http_client_handle_t g_client = NULL;
 static char g_response_text[512] = {0};
 static bool g_has_incoming_audio = false;
-static uint8_t *g_incoming_audio_buffer = NULL;
-static size_t g_incoming_audio_size = 0;
 
 // Initialize WebSocket client
 void websocket_init(void)
 {
     ESP_LOGI(TAG, "Initializing WebSocket client...");
     
-    // Configure HTTP client (WebSocket will use ws:// or wss://)
+    // Configure HTTP client
     esp_http_client_config_t config = {
         .url = WEBSOCKET_URL,
-        .transport_type = HTTP_TRANSPORT_OVER_WEBSOCKET,
         .method = HTTP_METHOD_GET,
         .timeout_ms = 10000,
         .buffer_size = 2048,
+        .disable_auto_redirect = true,
     };
     
     g_client = esp_http_client_init(&config);
@@ -45,7 +43,7 @@ void websocket_init(void)
         return;
     }
     
-    ESP_LOGI(TAG, "WebSocket client initialized");
+    ESP_LOGI(TAG, "WebSocket client initialized (URL: %s)", WEBSOCKET_URL);
 }
 
 // Connect to Hermes server
@@ -59,6 +57,9 @@ void websocket_connect(void)
         g_connected = false;
         return;
     }
+    
+    // Perform WebSocket upgrade
+    // TODO: Implement proper WebSocket handshake
     
     g_connected = true;
     ESP_LOGI(TAG, "Connected to Hermes server");
@@ -89,12 +90,12 @@ void websocket_send_hello(void)
     cJSON *hello = cJSON_CreateObject();
     cJSON_AddStringToObject(hello, "type", "hello");
     cJSON_AddStringToObject(hello, "device_id", BOARD_DEVICE_NAME);
+    cJSON_AddStringToObject(hello, "version", BOARD_FIRMWARE_VERSION);
     
     char *json_str = cJSON_PrintUnformatted(hello);
     ESP_LOGI(TAG, "Sending hello: %s", json_str);
     
-    // TODO: Send via WebSocket
-    // esp_http_client_write(g_client, json_str, strlen(json_str));
+    // TODO: Send via WebSocket when implemented
     
     free(json_str);
     cJSON_Delete(hello);
@@ -125,7 +126,7 @@ void websocket_send_audio_frame(audio_frame_t *frame)
     
     // TODO: Send audio frame via WebSocket
     // For now, just log
-    ESP_LOGV(TAG, "Sending audio frame: %zu bytes", frame->count * sizeof(int16_t));
+    ESP_LOGV(TAG, "Sending audio frame: %zu samples", frame->count);
 }
 
 // Send audio end (stop recording)
@@ -159,7 +160,6 @@ bool websocket_read_audio_frame(audio_frame_t *frame)
     }
     
     // TODO: Read from buffer and populate frame
-    // For now, return false to indicate no data
     return false;
 }
 
