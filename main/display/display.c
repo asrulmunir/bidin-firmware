@@ -1,6 +1,7 @@
 /*
  * Display Driver for Freenove ESP32-S3 2.8" (ST7789 LCD)
- * SPI interface, 320x240 resolution
+ * EXACT copy of xiaozhi-esp32 initialization sequence
+ * Reference: https://github.com/78/xiaozhi-esp32/blob/main/main/boards/freenove-esp32s3-display-2.8-lcd/lcd.cc
  */
 
 #include "display.h"
@@ -11,7 +12,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <string.h>
-#include <math.h>
+#include <stdint.h>
 
 static const char *TAG = "display";
 
@@ -21,7 +22,6 @@ static bool g_initialized = false;
 
 // SPI configuration
 #define SPI_HOST SPI2_HOST
-#define SPI_CLOCK_SPEED_HZ (24 * 1000 * 1000)  // 24 MHz
 
 // ST7789 commands
 #define ST7789_NOP      0x00
@@ -38,16 +38,8 @@ static bool g_initialized = false;
 #define ST7789_RAMWR    0x2C
 #define ST7789_COLMOD   0x3A
 #define ST7789_MADCTL   0x36
-#define ST7789_FRMCTR1  0xB1
 
-// Memory Access Control
-#define MADCTL_MY  0x80
-#define MADCTL_MX  0x40
-#define MADCTL_MV  0x20
-#define MADCTL_ML  0x10
-#define MADCTL_RGB 0x00
-
-// Color definitions
+// Color definitions (RGB565 - BIG ENDIAN for SPI)
 #define COLOR_BLACK   0x0000
 #define COLOR_WHITE   0xFFFF
 #define COLOR_RED     0xF800
@@ -59,59 +51,36 @@ static bool g_initialized = false;
 #define COLOR_GRAY    0x7BEF
 #define COLOR_ORANGE  0xFD20
 
-// Font data (simplified 5x7 font)
-static const uint8_t font5x7[][5] = {
-    {0x00, 0x00, 0x00, 0x00, 0x00}, // (space)
-    {0x00, 0x00, 0x5F, 0x00, 0x00}, // !
-    // ... (truncated for brevity - would include full font table)
-};
-
-// Helper: Convert RGB565
-static uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b)
+// Helper: Swap bytes for little-endian ESP32
+static inline uint16_t swap_bytes(uint16_t val)
 {
-    return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
+    return ((val & 0xFF) << 8) | ((val >> 8) & 0xFF);
 }
 
 // Helper: Send command to display
 static void display_command(uint8_t cmd)
 {
-    ESP_LOGV(TAG, "CMD: 0x%02X", cmd);
-    
     gpio_set_level(DISPLAY_DC_PIN, 0);  // Command mode (DC LOW)
-    gpio_set_level(DISPLAY_SPI_CS_PIN, 0);  // Select
     
     spi_transaction_t t = {
         .flags = SPI_TRANS_USE_TXDATA,
         .length = 8,
         .tx_data[0] = cmd,
     };
-    esp_err_t ret = spi_device_polling_transmit(g_spi_handle, &t);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "SPI command transmit FAILED: %s", esp_err_to_name(ret));
-    }
-    
-    gpio_set_level(DISPLAY_SPI_CS_PIN, 1);  // Deselect
+    spi_device_polling_transmit(g_spi_handle, &t);
 }
 
 // Helper: Send data to display
 static void display_data(uint8_t data)
 {
-    ESP_LOGV(TAG, "DATA: 0x%02X", data);
-    
     gpio_set_level(DISPLAY_DC_PIN, 1);  // Data mode (DC HIGH)
-    gpio_set_level(DISPLAY_SPI_CS_PIN, 0);  // Select
     
     spi_transaction_t t = {
         .flags = SPI_TRANS_USE_TXDATA,
         .length = 8,
         .tx_data[0] = data,
     };
-    esp_err_t ret = spi_device_polling_transmit(g_spi_handle, &t);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "SPI data transmit FAILED: %s", esp_err_to_name(ret));
-    }
-    
-    gpio_set_level(DISPLAY_SPI_CS_PIN, 1);  // Deselect
+    spi_device_polling_transmit(g_spi_handle, &t);
 }
 
 // Helper: Set cursor position
@@ -121,99 +90,87 @@ static void display_set_cursor(uint16_t x, uint16_t y)
     display_command(ST7789_CASET);
     display_data(x >> 8);
     display_data(x & 0xFF);
-    display_data((x + 1) >> 8);
+    display_data(((x + 1) >> 8) & 0xFF);
     display_data((x + 1) & 0xFF);
     
     // Row Address Set
     display_command(ST7789_RASET);
     display_data(y >> 8);
     display_data(y & 0xFF);
-    display_data((y + 1) >> 8);
+    display_data(((y + 1) >> 8) & 0xFF);
     display_data((y + 1) & 0xFF);
     
     // Memory Write
     display_command(ST7789_RAMWR);
 }
 
-// Initialize display
+// Initialize display - EXACT xiaozhi sequence
 void display_init(void)
 {
-    ESP_LOGI(TAG, "=== Starting display initialization ===");
+    ESP_LOGI(TAG, "=== Initializing ST7789 display (xiaozhi sequence) ===");
     
-    ESP_LOGI(TAG, "Configuring GPIO pins...");
-    ESP_LOGI(TAG, "  RESET=GPIO%d, DC=GPIO%d, CS=GPIO%d, BL=GPIO%d",
-             DISPLAY_RESET_PIN, DISPLAY_DC_PIN, DISPLAY_SPI_CS_PIN, DISPLAY_BACKLIGHT_PIN);
+    // Step 1: Configure GPIO pins (EXCEPT RESET - do that after SPI init)
+    ESP_LOGI(TAG, "Configuring DC and CS pins...");
+    gpio_reset_pin(DISPLAY_DC_PIN);
+    gpio_set_direction(DISPLAY_DC_PIN, GPIO_MODE_OUTPUT);
+    gpio_set_level(DISPLAY_DC_PIN, 0);
     
-    // Configure GPIO pins
-    gpio_config_t io_conf = {
-        .pin_bit_mask = (1ULL << DISPLAY_DC_PIN) | 
-                        (1ULL << DISPLAY_BACKLIGHT_PIN) |
-                        (1ULL << DISPLAY_SPI_CS_PIN) |
-                        (1ULL << DISPLAY_RESET_PIN),
-        .mode = GPIO_MODE_OUTPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-    };
-    
-    ESP_LOGI(TAG, "Calling gpio_config()...");
-    gpio_config(&io_conf);
-    ESP_LOGI(TAG, "GPIO configured OK");
-    
-    // Hardware reset sequence (CRITICAL!)
-    ESP_LOGI(TAG, "Performing hardware reset...");
-    gpio_set_level(DISPLAY_RESET_PIN, 0);  // Reset LOW
-    vTaskDelay(pdMS_TO_TICKS(10));
-    gpio_set_level(DISPLAY_RESET_PIN, 1);  // Reset HIGH
-    vTaskDelay(pdMS_TO_TICKS(120));  // Wait for reset to complete
-    ESP_LOGI(TAG, "Reset complete");
-    
-    // Initialize SPI
+    // Step 2: Initialize SPI bus FIRST (before reset!)
     ESP_LOGI(TAG, "Initializing SPI bus...");
-    spi_bus_config_t bus_config = {
+    spi_bus_config_t buscfg = {
         .mosi_io_num = DISPLAY_SPI_MOSI_PIN,
-        .miso_io_num = -1,  // Not used
+        .miso_io_num = GPIO_NUM_NC,  // Use GPIO_NUM_NC, not -1!
         .sclk_io_num = DISPLAY_SPI_SCK_PIN,
-        .quadwp_io_num = -1,
-        .quadhd_io_num = -1,
-        .max_transfer_sz = DISPLAY_WIDTH * DISPLAY_HEIGHT * 2,
+        .quadwp_io_num = GPIO_NUM_NC,
+        .quadhd_io_num = GPIO_NUM_NC,
+        .max_transfer_sz = DISPLAY_WIDTH * DISPLAY_HEIGHT * sizeof(uint16_t),
     };
     
-    ESP_LOGI(TAG, "Calling spi_bus_initialize()...");
-    esp_err_t ret = spi_bus_initialize(SPI_HOST, &bus_config, SPI_DMA_CH_AUTO);
+    esp_err_t ret = spi_bus_initialize(SPI_HOST, &buscfg, SPI_DMA_CH_AUTO);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "SPI bus init FAILED: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "SPI bus init failed: %s", esp_err_to_name(ret));
         return;
     }
-    ESP_LOGI(TAG, "SPI bus initialized OK");
+    ESP_LOGI(TAG, "SPI bus initialized");
     
-    spi_device_interface_config_t dev_config = {
-        .clock_speed_hz = 24000000,  // 24 MHz
-        .mode = 0,  // ST7789 works with SPI mode 0 (CPOL=0, CPHA=0) - verified with xiaozhi official
-        .spics_io_num = -1,  // Manual CS control
-        .queue_size = 1,
-        .pre_cb = NULL,
-        .post_cb = NULL,
+    // Step 3: Add SPI device with AUTO CS (not manual!)
+    ESP_LOGI(TAG, "Adding SPI device with auto CS...");
+    spi_device_interface_config_t devcfg = {
+        .clock_speed_hz = 26 * 1000 * 1000,  // 26 MHz (xiaozhi uses 26, not 24!)
+        .mode = 0,  // SPI mode 0
+        .spics_io_num = DISPLAY_SPI_CS_PIN,  // Use GPIO pin for auto CS!
+        .queue_size = 7,  // xiaozhi uses 7
+        .flags = SPI_DEVICE_NO_DUMMY,
     };
     
-    ESP_LOGI(TAG, "Calling spi_bus_add_device()...");
-    ret = spi_bus_add_device(SPI_HOST, &dev_config, &g_spi_handle);
+    ret = spi_bus_add_device(SPI_HOST, &devcfg, &g_spi_handle);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "SPI device add FAILED: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "SPI device add failed: %s", esp_err_to_name(ret));
         spi_bus_free(SPI_HOST);
         return;
     }
-    ESP_LOGI(TAG, "SPI device added OK, handle=%p", (void*)g_spi_handle);
+    ESP_LOGI(TAG, "SPI device added, handle=%p", (void*)g_spi_handle);
     
-    ESP_LOGI(TAG, "SPI initialized, starting display init sequence...");
+    // Step 4: NOW do hardware reset (AFTER spi_bus_add_device!)
+    ESP_LOGI(TAG, "Performing hardware reset...");
+    gpio_reset_pin(DISPLAY_RESET_PIN);
+    gpio_set_direction(DISPLAY_RESET_PIN, GPIO_MODE_OUTPUT);
+    gpio_set_level(DISPLAY_RESET_PIN, 0);
+    vTaskDelay(pdMS_TO_TICKS(10));  // 10ms
+    gpio_set_level(DISPLAY_RESET_PIN, 1);
+    vTaskDelay(pdMS_TO_TICKS(120));  // 120ms
+    ESP_LOGI(TAG, "Reset complete");
     
-    // ST7789 initialization sequence (from xiaozhi-esp32 official)
-    display_command(ST7789_SWRESET);  // Software reset
+    // Step 5: Send initialization commands (EXACT xiaozhi sequence)
+    ESP_LOGI(TAG, "Sending initialization commands...");
+    
+    display_command(ST7789_SWRESET);
     vTaskDelay(pdMS_TO_TICKS(150));
     
-    display_command(ST7789_SLPOUT);  // Sleep out
+    display_command(ST7789_SLPOUT);
     vTaskDelay(pdMS_TO_TICKS(120));
     
-    // Porch control (extra commands from xiaozhi)
+    // Porch control
     display_command(0xB2);
     display_data(0x0C);
     display_data(0x0C);
@@ -225,7 +182,7 @@ void display_init(void)
     display_command(0xB7);
     display_data(0x35);
     
-    // VCOMS setting
+    // VCOMS
     display_command(0xBB);
     display_data(0x19);
     
@@ -249,23 +206,23 @@ void display_init(void)
     display_command(0xC6);
     display_data(0x0F);
     
-    // Power control A (extra)
+    // Power control A
     display_command(0xD0);
     display_data(0xA4);
     display_data(0xA1);
     
-    // Memory Access Control - RGB, no rotation
+    // Memory Access Control
     display_command(ST7789_MADCTL);
     display_data(0x00);  // RGB, no rotation
     
-    // Color Mode: 16-bit (RGB565)
+    // Pixel format: 16-bit RGB565
     display_command(ST7789_COLMOD);
-    display_data(0x05);  // 16-bit
+    display_data(0x05);
     
-    // Display Inversion ON
+    // Display inversion ON
     display_command(ST7789_INVON);
     
-    // Normal Display Mode ON
+    // Normal display mode ON
     display_command(ST7789_NORON);
     vTaskDelay(pdMS_TO_TICKS(10));
     
@@ -273,120 +230,96 @@ void display_init(void)
     display_command(ST7789_DISPON);
     vTaskDelay(pdMS_TO_TICKS(120));
     
-    // Turn on backlight (MUST DO LAST!)
+    // Step 6: Turn on backlight LAST
+    ESP_LOGI(TAG, "Turning on backlight...");
+    gpio_reset_pin(DISPLAY_BACKLIGHT_PIN);
+    gpio_set_direction(DISPLAY_BACKLIGHT_PIN, GPIO_MODE_OUTPUT);
     gpio_set_level(DISPLAY_BACKLIGHT_PIN, 1);
-    ESP_LOGI(TAG, "Backlight ON");
     
     // Clear screen to black
+    ESP_LOGI(TAG, "Clearing screen...");
     display_fill(COLOR_BLACK);
     
     g_initialized = true;
     ESP_LOGI(TAG, "✅ Display initialized successfully!");
 }
 
-// Fill screen with color
+// Fill screen with color - with byte swap for little-endian
 void display_fill(uint16_t color)
 {
     if (!g_initialized) return;
     
-    gpio_set_level(DISPLAY_DC_PIN, 1);  // Data mode
-    gpio_set_level(DISPLAY_SPI_CS_PIN, 0);  // Select
+    // Swap bytes for SPI (little-endian → big-endian)
+    uint16_t swapped_color = swap_bytes(color);
     
-    // Set cursor to (0,0) with size (320,240)
+    gpio_set_level(DISPLAY_DC_PIN, 1);  // Data mode
+    
+    // Set cursor to (0,0)
     display_set_cursor(0, 0);
     
-    // Prepare buffer
+    // Prepare buffer with swapped bytes
     uint16_t buffer[256];
     for (int i = 0; i < 256; i++) {
-        buffer[i] = color;
+        buffer[i] = swapped_color;
     }
     
-    // Send pixels in chunks with yield to avoid watchdog
+    // Send pixels in chunks
     int total_pixels = DISPLAY_WIDTH * DISPLAY_HEIGHT;
     int chunks = total_pixels / 256;
     
     for (int i = 0; i < chunks; i++) {
         spi_transaction_t t = {
             .tx_buffer = buffer,
-            .length = 256 * 16,  // 256 pixels * 16 bits
+            .length = 256 * 16,
         };
         spi_device_polling_transmit(g_spi_handle, &t);
         
-        // Yield every 10 chunks to prevent watchdog trigger
+        // Yield every 10 chunks
         if (i % 10 == 0) {
             vTaskDelay(pdMS_TO_TICKS(1));
         }
     }
-    
-    gpio_set_level(DISPLAY_SPI_CS_PIN, 1);  // Deselect
 }
 
-// Draw pixel at (x, y)
+// Draw pixel with byte swap
 void display_draw_pixel(uint16_t x, uint16_t y, uint16_t color)
 {
     if (!g_initialized || x >= DISPLAY_WIDTH || y >= DISPLAY_HEIGHT) return;
     
+    // Swap bytes for SPI
+    uint16_t swapped_color = swap_bytes(color);
+    
     display_set_cursor(x, y);
     
     gpio_set_level(DISPLAY_DC_PIN, 1);
-    gpio_set_level(DISPLAY_SPI_CS_PIN, 0);
     
     spi_transaction_t t = {
         .flags = SPI_TRANS_USE_TXDATA,
         .length = 16,
-        .tx_data[0] = color >> 8,
-        .tx_data[1] = color & 0xFF,
+        .tx_data[0] = swapped_color >> 8,
+        .tx_data[1] = swapped_color & 0xFF,
     };
     spi_device_polling_transmit(g_spi_handle, &t);
-    
-    gpio_set_level(DISPLAY_SPI_CS_PIN, 1);
 }
 
-// Draw character (5x7 font)
-static void display_draw_char(uint16_t x, uint16_t y, char c, uint16_t color)
-{
-    if (!g_initialized) return;
-    
-    uint8_t char_index = (c >= ' ' && c <= '~') ? (c - ' ') : 0;
-    const uint8_t *char_data = font5x7[char_index];
-    
-    for (int row = 0; row < 7; row++) {
-        for (int col = 0; col < 5; col++) {
-            if ((char_data[col] >> row) & 0x01) {
-                display_draw_pixel(x + col, y + row, color);
-            }
-        }
-    }
-}
-
-// Draw string
+// Draw string (simplified - 5x7 font)
 void display_draw_string(uint16_t x, uint16_t y, const char *str, uint16_t color)
 {
-    if (!g_initialized || str == NULL) return;
-    
-    uint16_t cursor_x = x;
-    while (*str) {
-        display_draw_char(cursor_x, y, *str, color);
-        cursor_x += 6;  // 5 pixels + 1 spacing
-        str++;
-    }
+    // TODO: Implement proper font rendering
+    // For now, just skip to avoid crash
 }
 
-// Draw rectangle - outline only (4 lines)
+// Draw rectangle
 void display_draw_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color)
 {
     if (!g_initialized || w == 0 || h == 0) return;
-    
-    // Draw top and bottom lines
     display_fill_rect(x, y, w, 1, color);  // Top
     display_fill_rect(x, y + h - 1, w, 1, color);  // Bottom
-    
-    // Draw left and right lines
     display_fill_rect(x, y, 1, h, color);  // Left
     display_fill_rect(x + w - 1, y, 1, h, color);  // Right
 }
 
-// Fill rectangle - EFFICIENT bulk SPI transfer
+// Fill rectangle with byte swap
 void display_fill_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color)
 {
     if (!g_initialized || w == 0 || h == 0) return;
@@ -396,82 +329,65 @@ void display_fill_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t 
     if (x + w > DISPLAY_WIDTH) w = DISPLAY_WIDTH - x;
     if (y + h > DISPLAY_HEIGHT) h = DISPLAY_HEIGHT - y;
     
-    // Set cursor to rectangle start
+    // Swap bytes for SPI
+    uint16_t swapped_color = swap_bytes(color);
+    
+    // Set cursor
     display_set_cursor(x, y);
     
-    gpio_set_level(DISPLAY_DC_PIN, 1);  // Data mode
-    gpio_set_level(DISPLAY_SPI_CS_PIN, 0);  // Select
+    gpio_set_level(DISPLAY_DC_PIN, 1);
     
-    // Prepare buffer (max 256 pixels per transaction)
+    // Prepare buffer
     uint16_t buffer[256];
     for (int i = 0; i < 256; i++) {
-        buffer[i] = color;
+        buffer[i] = swapped_color;
     }
     
-    // Send pixels row by row
+    // Send pixels
     int pixels_sent = 0;
     int total_pixels = w * h;
     
     for (int row = 0; row < h; row++) {
         for (int col = 0; col < w; col++) {
-            buffer[pixels_sent % 256] = color;
+            buffer[pixels_sent % 256] = swapped_color;
             pixels_sent++;
             
-            // Send when buffer full or end of rectangle
             if (pixels_sent % 256 == 0 || pixels_sent == total_pixels) {
                 int count = (pixels_sent % 256 == 0) ? 256 : (pixels_sent % 256);
                 spi_transaction_t t = {
                     .tx_buffer = buffer,
-                    .length = count * 16,  // count pixels * 16 bits
+                    .length = count * 16,
                 };
                 spi_device_polling_transmit(g_spi_handle, &t);
                 
-                // Yield every 10 transactions
                 if (pixels_sent % 2560 == 0) {
                     vTaskDelay(pdMS_TO_TICKS(1));
                 }
             }
         }
     }
-    
-    gpio_set_level(DISPLAY_SPI_CS_PIN, 1);  // Deselect
 }
 
-// Show boot screen - SIMPLIFIED TEST
+// Show boot screen - simple color test
 void display_show_boot_screen(void)
 {
     if (!g_initialized) return;
     
     ESP_LOGI(TAG, "=== DISPLAY TEST START ===");
     
-    // TEST 1: Direct SPI write test - send single red pixel
-    ESP_LOGI(TAG, "TEST 1: Direct pixel write...");
-    
-    // Set cursor to center (160, 120)
-    display_set_cursor(160, 120);
-    
-    // Send ONE red pixel directly
-    gpio_set_level(DISPLAY_DC_PIN, 1);  // Data mode
-    gpio_set_level(DISPLAY_SPI_CS_PIN, 0);
-    
-    uint8_t pixel_data[2];
-    pixel_data[0] = 0xF8;  // Red high byte (RGB565: 11111 000 000)
-    pixel_data[1] = 0x00;  // Red low byte
-    
-    spi_transaction_t t = {
-        .tx_buffer = pixel_data,
-        .length = 16,
-    };
-    esp_err_t ret = spi_device_polling_transmit(g_spi_handle, &t);
-    ESP_LOGI(TAG, "SPI transmit returned: %d (%s)", ret, ret == ESP_OK ? "OK" : "FAIL");
-    
-    gpio_set_level(DISPLAY_SPI_CS_PIN, 1);
-    
-    vTaskDelay(pdMS_TO_TICKS(3000));  // Wait 3 seconds
-    
-    // TEST 2: Fill entire screen with RED using bulk transfer
-    ESP_LOGI(TAG, "TEST 2: Full screen RED fill...");
+    // TEST 1: Full screen RED
+    ESP_LOGI(TAG, "Filling screen with RED...");
     display_fill(COLOR_RED);
+    vTaskDelay(pdMS_TO_TICKS(3000));
+    
+    // TEST 2: Full screen GREEN
+    ESP_LOGI(TAG, "Filling screen with GREEN...");
+    display_fill(COLOR_GREEN);
+    vTaskDelay(pdMS_TO_TICKS(3000));
+    
+    // TEST 3: Full screen BLUE
+    ESP_LOGI(TAG, "Filling screen with BLUE...");
+    display_fill(COLOR_BLUE);
     vTaskDelay(pdMS_TO_TICKS(3000));
     
     ESP_LOGI(TAG, "=== DISPLAY TEST END ===");
@@ -481,66 +397,26 @@ void display_show_boot_screen(void)
 void display_show_listening(void)
 {
     if (!g_initialized) return;
-    
-    ESP_LOGI(TAG, "Showing listening screen");
-    
-    // Clear to green
     display_fill(COLOR_GREEN);
-    
-    // Microphone icon (simple circle)
-    display_fill_rect(120, 80, 80, 100, COLOR_WHITE);
-    display_fill_rect(130, 70, 60, 20, COLOR_WHITE);
-    
-    // Text
-    display_draw_string(100, 200, "Listening...", COLOR_BLACK);
 }
 
 // Show processing screen
 void display_show_processing(void)
 {
     if (!g_initialized) return;
-    
-    ESP_LOGI(TAG, "Showing processing screen");
-    
-    // Clear to yellow
     display_fill(COLOR_YELLOW);
-    
-    // Spinner or dots
-    display_fill_rect(140, 100, 40, 40, COLOR_BLACK);
-    
-    // Text
-    display_draw_string(100, 200, "Processing...", COLOR_BLACK);
 }
 
 // Show speaking screen
 void display_show_speaking(void)
 {
     if (!g_initialized) return;
-    
-    ESP_LOGI(TAG, "Showing speaking screen");
-    
-    // Clear to cyan
     display_fill(COLOR_CYAN);
-    
-    // Speaker icon
-    display_fill_rect(120, 90, 80, 60, COLOR_WHITE);
-    
-    // Text
-    display_draw_string(110, 200, "Speaking...", COLOR_BLACK);
 }
 
 // Show text message
 void display_show_text(const char *text)
 {
     if (!g_initialized || text == NULL) return;
-    
-    ESP_LOGI(TAG, "Displaying text: %s", text);
-    
-    // Clear to black
-    display_fill(COLOR_BLACK);
-    
-    // Draw text in white, centered
-    uint16_t text_width = strlen(text) * 6;
-    uint16_t x = (DISPLAY_WIDTH - text_width) / 2;
-    display_draw_string(x, 110, text, COLOR_WHITE);
+    // TODO: Implement text display
 }
