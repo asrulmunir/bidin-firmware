@@ -46,13 +46,10 @@ void app_main(void)
     ESP_LOGI(TAG, "Initializing board...");
     board_init();
     
-    // Initialize display - TEMPORARILY DISABLED FOR DEBUG
-    ESP_LOGI(TAG, "Skipping display init (debug mode)...");
-    // display_init();
-    // display_show_boot_screen();
-    
-    // TEST: Just log to verify code reaches here
-    ESP_LOGI(TAG, "=== CODE RUNNING PAST DISPLAY! ===");
+    // Initialize display
+    ESP_LOGI(TAG, "Initializing display...");
+    display_init();
+    display_show_boot_screen();
     
     // Initialize audio (I2S mic + speaker)
     ESP_LOGI(TAG, "Initializing audio...");
