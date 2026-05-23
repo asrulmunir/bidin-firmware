@@ -239,13 +239,21 @@ void display_fill(uint16_t color)
         buffer[i] = color;
     }
     
-    // Send pixels
-    for (int i = 0; i < (DISPLAY_WIDTH * DISPLAY_HEIGHT) / 256; i++) {
+    // Send pixels in chunks with yield to avoid watchdog
+    int total_pixels = DISPLAY_WIDTH * DISPLAY_HEIGHT;
+    int chunks = total_pixels / 256;
+    
+    for (int i = 0; i < chunks; i++) {
         spi_transaction_t t = {
             .tx_buffer = buffer,
             .length = 256 * 16,  // 256 pixels * 16 bits
         };
         spi_device_polling_transmit(g_spi_handle, &t);
+        
+        // Yield every 10 chunks to prevent watchdog trigger
+        if (i % 10 == 0) {
+            vTaskDelay(pdMS_TO_TICKS(1));
+        }
     }
     
     gpio_set_level(DISPLAY_SPI_CS_PIN, 1);  // Deselect

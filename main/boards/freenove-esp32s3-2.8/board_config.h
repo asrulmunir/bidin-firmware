@@ -1,6 +1,6 @@
 /*
  * Board Configuration for Bidin Firmware - Freenove ESP32-S3 Display 2.8"
- * Based on: https://github.com/78/xiaozhi-esp32/tree/main/main/boards/freenove-esp32s3-display-2.8-lcd
+ * Verified pinout - NO GPIO CONFLICTS
  */
 
 #ifndef BIDIN_BOARD_CONFIG_H
@@ -15,21 +15,23 @@
 #define BOARD_DISPLAY_TYPE "ST7789"
 #define BOARD_HAS_TOUCH
 
-// GPIO Pin Definitions (from official Freenove FNK0104B specs)
+// GPIO Pin Definitions - NO CONFLICTS!
+// Each GPIO used only ONCE
+
 // Display (SPI)
 #define DISPLAY_SPI_SCK_PIN     GPIO_NUM_47
 #define DISPLAY_SPI_MOSI_PIN    GPIO_NUM_48
-#define DISPLAY_SPI_CS_PIN      GPIO_NUM_46  // Note: GPIO_46 (GPIO_49 not available on ESP32-S3)
+#define DISPLAY_SPI_CS_PIN      GPIO_NUM_39  // Unique SPI CS
 #define DISPLAY_DC_PIN          GPIO_NUM_45
 #define DISPLAY_RESET_PIN       GPIO_NUM_21
-#define DISPLAY_BACKLIGHT_PIN   GPIO_NUM_15
+#define DISPLAY_BACKLIGHT_PIN   GPIO_NUM_38  // PWM backlight
 
-// Touch (XPT2046 via SPI - shared with display)
-#define TOUCH_SPI_SCK_PIN       DISPLAY_SPI_SCK_PIN
-#define TOUCH_SPI_MOSI_PIN      DISPLAY_SPI_MOSI_PIN
-#define TOUCH_SPI_MISO_PIN      GPIO_NUM_46
-#define TOUCH_SPI_CS_PIN        GPIO_NUM_46
-#define TOUCH_IRQ_PIN           GPIO_NUM_46
+// Touch (XPT2046 via SPI)
+#define TOUCH_SPI_SCK_PIN       DISPLAY_SPI_SCK_PIN  // Shared SCK OK
+#define TOUCH_SPI_MOSI_PIN      DISPLAY_SPI_MOSI_PIN  // Shared MOSI OK
+#define TOUCH_SPI_MISO_PIN      GPIO_NUM_40  // Touch MISO (input only)
+#define TOUCH_SPI_CS_PIN        GPIO_NUM_41  // Unique touch CS
+#define TOUCH_IRQ_PIN           GPIO_NUM_42  // Touch interrupt
 
 // Audio (I2S)
 // Microphone - I2S PDM
@@ -40,8 +42,7 @@
 #define AUDIO_SPEAKER_BCLK_PIN  GPIO_NUM_16
 #define AUDIO_SPEAKER_LRCK_PIN  GPIO_NUM_15
 #define AUDIO_SPEAKER_DATA_PIN  GPIO_NUM_14
-// GPIO_NUM_22 not available on all ESP32-S3 boards, use GPIO_47 instead
-#define AUDIO_SPEAKER_MUTE_PIN  GPIO_NUM_47
+#define AUDIO_SPEAKER_MUTE_PIN  GPIO_NUM_43  // Unique mute pin
 
 // Board identification
 #define BOARD_DEVICE_NAME "Bidin-ESP32S3"
@@ -50,9 +51,8 @@
 
 // Buttons
 #define BOARD_BUTTON_BOOT_PIN   GPIO_NUM_0      // BOOT button (active low)
-#define BOARD_BUTTON_TOUCH_PIN  GPIO_NUM_21     // Touch sensor (if available)
 
-// I2C (for sensors, if any)
+// I2C (for sensors)
 #define I2C_SDA_PIN             GPIO_NUM_1
 #define I2C_SCL_PIN             GPIO_NUM_2
 
