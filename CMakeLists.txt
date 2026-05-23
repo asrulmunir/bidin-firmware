@@ -1,5 +1,5 @@
 # Bidin Firmware - Minimal ESP32-S3 Voice Assistant
-# cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.16)
 
 # Set target chip (ESP32-S3)
 set(IDF_TARGET "esp32s3")
