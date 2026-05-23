@@ -3,5 +3,4 @@
 
 dependencies:
   idf: ">=5.1"
-  # WebSocket client with proper transport
-  espressif/esp_websocket_client: "^1.2.0"
+  # No extra dependencies needed - esp_websocket_client is built into ESP-IDF v5.5

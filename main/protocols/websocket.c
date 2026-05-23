@@ -7,7 +7,7 @@
 #include "board_config.h"
 #include "audio.h"
 #include "esp_log.h"
-#include "esp_websocket_client.h"
+#include "esp_websocket_client.h"  // Built into ESP-IDF v5.5
 #include "cJSON.h"
 #include <string.h>
 #include <stdlib.h>
