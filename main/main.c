@@ -1,8 +1,7 @@
 /*
- * Test FNK0104A Pinout
- * Different from FNK0104B:
- * - CS: GPIO34 (not GPIO39)
- * - DC: GPIO39 (not GPIO45)
+ * MINIMAL Display Test - EXACT Xiaozhi Code
+ * No board_init(), no audio, no wifi - just display
+ * Direct copy from: https://github.com/78/xiaozhi-esp32
  */
 
 #include <stdio.h>
@@ -12,17 +11,19 @@
 #include "driver/spi_master.h"
 #include "esp_log.h"
 
-static const char *TAG = "pinout_test";
+static const char *TAG = "xiaozhi_test";
 
-// FNK0104A pins (DIFFERENT from FNK0104B!)
-#define DISPLAY_CS      GPIO_NUM_34  // Was GPIO39 for FNK0104B
-#define DISPLAY_DC      GPIO_NUM_39  // Was GPIO45 for FNK0104B
-#define DISPLAY_RESET   GPIO_NUM_46  // Same
-#define DISPLAY_SCK     GPIO_NUM_47  // Same
-#define DISPLAY_MOSI    GPIO_NUM_48  // Same
-#define DISPLAY_BL      GPIO_NUM_15  // Same
+// EXACT pins from xiaozhi-esp32 for Freenove ESP32-S3 2.8"
+#define DISPLAY_MOSI  48
+#define DISPLAY_SCLK  47
+#define DISPLAY_CS    39
+#define DISPLAY_DC    45
+#define DISPLAY_RST   46
+#define DISPLAY_BL    15
 
 #define SPI_HOST SPI2_HOST
+
+// ST7789 commands
 #define ST7789_SWRESET  0x01
 #define ST7789_SLPOUT   0x11
 #define ST7789_NORON    0x13
@@ -34,32 +35,109 @@ static const char *TAG = "pinout_test";
 #define ST7789_COLMOD   0x3A
 #define ST7789_MADCTL   0x36
 
-static spi_device_handle_t spi_handle = NULL;
+static spi_device_handle_t spi_dev = NULL;
 
-static void send_command(uint8_t cmd)
+static void lcd_write_cmd(uint8_t cmd)
 {
     gpio_set_level(DISPLAY_DC, 0);
-    spi_transaction_t t = {.flags = SPI_TRANS_USE_TXDATA, .length = 8, .tx_data[0] = cmd};
-    spi_device_polling_transmit(spi_handle, &t);
+    spi_transaction_t t = {
+        .flags = SPI_TRANS_USE_TXDATA,
+        .length = 8,
+        .tx_data[0] = cmd,
+    };
+    spi_device_polling_transmit(spi_dev, &t);
 }
 
-static void send_data(uint8_t data)
+static void lcd_write_data(uint8_t data)
 {
     gpio_set_level(DISPLAY_DC, 1);
-    spi_transaction_t t = {.flags = SPI_TRANS_USE_TXDATA, .length = 8, .tx_data[0] = data};
-    spi_device_polling_transmit(spi_handle, &t);
+    spi_transaction_t t = {
+        .flags = SPI_TRANS_USE_TXDATA,
+        .length = 8,
+        .tx_data[0] = data,
+    };
+    spi_device_polling_transmit(spi_dev, &t);
 }
 
-static void fill_screen(uint16_t color)
+static void lcd_init(void)
 {
-    gpio_set_level(DISPLAY_DC, 1);
-    send_command(ST7789_CASET);
-    send_data(0); send_data(0); send_data(1); send_data(31);
-    send_command(ST7789_RASET);
-    send_data(0); send_data(0); send_data(0); send_data(239);
-    send_command(ST7789_RAMWR);
+    ESP_LOGI(TAG, "LCD init sequence (EXACT xiaozhi)...");
     
+    lcd_write_cmd(ST7789_SWRESET);
+    vTaskDelay(pdMS_TO_TICKS(150));
+    
+    lcd_write_cmd(ST7789_SLPOUT);
+    vTaskDelay(pdMS_TO_TICKS(120));
+    
+    lcd_write_cmd(0xB2);  // Porch control
+    lcd_write_data(0x0C);
+    lcd_write_data(0x0C);
+    lcd_write_data(0x00);
+    lcd_write_data(0x33);
+    lcd_write_data(0x33);
+    
+    lcd_write_cmd(0xB7);  // Gate control
+    lcd_write_data(0x35);
+    
+    lcd_write_cmd(0xBB);  // VCOMS
+    lcd_write_data(0x19);
+    
+    lcd_write_cmd(0xC0);  // Power control 1
+    lcd_write_data(0x2C);
+    
+    lcd_write_cmd(0xC2);  // Power control 2
+    lcd_write_data(0x01);
+    
+    lcd_write_cmd(0xC3);  // Power control 3
+    lcd_write_data(0x12);
+    
+    lcd_write_cmd(0xC4);  // Power control 4
+    lcd_write_data(0x20);
+    
+    lcd_write_cmd(0xC6);  // VCOM control
+    lcd_write_data(0x0F);
+    
+    lcd_write_cmd(0xD0);  // Power control A
+    lcd_write_data(0xA4);
+    lcd_write_data(0xA1);
+    
+    lcd_write_cmd(ST7789_MADCTL);  // Memory access control
+    lcd_write_data(0x00);
+    
+    lcd_write_cmd(ST7789_COLMOD);  // Interface pixel format
+    lcd_write_data(0x05);
+    
+    lcd_write_cmd(ST7789_INVON);
+    lcd_write_cmd(ST7789_NORON);
+    vTaskDelay(pdMS_TO_TICKS(10));
+    
+    lcd_write_cmd(ST7789_DISPON);
+    vTaskDelay(pdMS_TO_TICKS(120));
+    
+    ESP_LOGI(TAG, "LCD init complete");
+}
+
+static void lcd_fill(uint16_t color)
+{
+    // Swap bytes for little-endian
     uint16_t swapped = ((color & 0xFF) << 8) | ((color >> 8) & 0xFF);
+    
+    lcd_write_cmd(ST7789_CASET);
+    lcd_write_data(0);
+    lcd_write_data(0);
+    lcd_write_data(1);
+    lcd_write_data(31);  // 320
+    
+    lcd_write_cmd(ST7789_RASET);
+    lcd_write_data(0);
+    lcd_write_data(0);
+    lcd_write_data(0);
+    lcd_write_data(239);  // 240
+    
+    lcd_write_cmd(ST7789_RAMWR);
+    
+    gpio_set_level(DISPLAY_DC, 1);
+    
     uint8_t buffer[256];
     for (int i = 0; i < 256; i += 2) {
         buffer[i] = swapped >> 8;
@@ -67,91 +145,88 @@ static void fill_screen(uint16_t color)
     }
     
     for (int i = 0; i < 300; i++) {
-        spi_transaction_t t = {.tx_buffer = buffer, .length = 256 * 8};
-        spi_device_polling_transmit(spi_handle, &t);
+        spi_transaction_t t = {
+            .tx_buffer = buffer,
+            .length = 256 * 8,
+        };
+        spi_device_polling_transmit(spi_dev, &t);
     }
 }
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "=== Testing FNK0104A Pinout ===");
-    ESP_LOGI(TAG, "CS=GPIO34, DC=GPIO39, RESET=GPIO46");
-    ESP_LOGI(TAG, "If screen shows RED, your board is FNK0104A!");
+    ESP_LOGI(TAG, "=== MINIMAL XIAOZHI DISPLAY TEST ===");
+    ESP_LOGI(TAG, "Pins: MOSI=%d, SCLK=%d, CS=%d, DC=%d, RST=%d, BL=%d",
+             DISPLAY_MOSI, DISPLAY_SCLK, DISPLAY_CS, DISPLAY_DC, DISPLAY_RST, DISPLAY_BL);
     
-    // Configure GPIO
+    // Configure GPIO - EXACT like xiaozhi
     gpio_reset_pin(DISPLAY_DC);
     gpio_set_direction(DISPLAY_DC, GPIO_MODE_OUTPUT);
+    gpio_set_level(DISPLAY_DC, 0);
+    
     gpio_reset_pin(DISPLAY_BL);
     gpio_set_direction(DISPLAY_BL, GPIO_MODE_OUTPUT);
-    gpio_reset_pin(DISPLAY_RESET);
-    gpio_set_direction(DISPLAY_RESET, GPIO_MODE_OUTPUT);
+    gpio_set_level(DISPLAY_BL, 0);  // OFF initially
     
-    // Initialize SPI
+    // Initialize SPI - EXACT like xiaozhi
+    ESP_LOGI(TAG, "Initializing SPI bus...");
     spi_bus_config_t buscfg = {
         .mosi_io_num = DISPLAY_MOSI,
         .miso_io_num = GPIO_NUM_NC,
-        .sclk_io_num = DISPLAY_SCK,
+        .sclk_io_num = DISPLAY_SCLK,
         .quadwp_io_num = GPIO_NUM_NC,
         .quadhd_io_num = GPIO_NUM_NC,
-        .max_transfer_sz = 320 * 240 * 2,
+        .max_transfer_sz = 320 * 240 * sizeof(uint16_t),
     };
     spi_bus_initialize(SPI_HOST, &buscfg, SPI_DMA_CH_AUTO);
+    ESP_LOGI(TAG, "SPI bus initialized");
     
+    // Add device - EXACT like xiaozhi
+    ESP_LOGI(TAG, "Adding SPI device...");
     spi_device_interface_config_t devcfg = {
-        .clock_speed_hz = 10 * 1000 * 1000,
+        .clock_speed_hz = 26 * 1000 * 1000,  // 26 MHz
         .mode = 0,
         .spics_io_num = DISPLAY_CS,
-        .queue_size = 1,
+        .queue_size = 7,
+        .flags = SPI_DEVICE_NO_DUMMY,
     };
-    spi_bus_add_device(SPI_HOST, &devcfg, &spi_handle);
+    spi_bus_add_device(SPI_HOST, &devcfg, &spi_dev);
+    ESP_LOGI(TAG, "SPI device added");
     
-    vTaskDelay(pdMS_TO_TICKS(500));
-    
-    // Reset display
-    ESP_LOGI(TAG, "Resetting display...");
-    gpio_set_level(DISPLAY_RESET, 0);
+    // Hardware reset - EXACT like xiaozhi (AFTER spi_bus_add_device!)
+    ESP_LOGI(TAG, "Hardware reset...");
+    gpio_reset_pin(DISPLAY_RST);
+    gpio_set_direction(DISPLAY_RST, GPIO_MODE_OUTPUT);
+    gpio_set_level(DISPLAY_RST, 0);
     vTaskDelay(pdMS_TO_TICKS(10));
-    gpio_set_level(DISPLAY_RESET, 1);
+    gpio_set_level(DISPLAY_RST, 1);
     vTaskDelay(pdMS_TO_TICKS(120));
+    ESP_LOGI(TAG, "Reset complete");
     
-    // Init sequence
-    ESP_LOGI(TAG, "Initializing display...");
-    send_command(ST7789_SWRESET);
-    vTaskDelay(pdMS_TO_TICKS(150));
-    send_command(ST7789_SLPOUT);
-    vTaskDelay(pdMS_TO_TICKS(120));
-    send_command(ST7789_MADCTL);
-    send_data(0x00);
-    send_command(ST7789_COLMOD);
-    send_data(0x05);
-    send_command(ST7789_INVON);
-    send_command(ST7789_NORON);
-    vTaskDelay(pdMS_TO_TICKS(10));
-    send_command(ST7789_DISPON);
-    vTaskDelay(pdMS_TO_TICKS(120));
+    // LCD initialization
+    lcd_init();
     
-    // Backlight ON
-    gpio_set_level(DISPLAY_BL, 1);
+    // Turn on backlight
     ESP_LOGI(TAG, "Backlight ON");
+    gpio_set_level(DISPLAY_BL, 1);
     
-    // Fill with RED
-    ESP_LOGI(TAG, "Filling screen with RED...");
-    fill_screen(0xF800);
+    // Test colors
+    ESP_LOGI(TAG, "Filling RED...");
+    lcd_fill(0xF800);  // RED
+    vTaskDelay(pdMS_TO_TICKS(3000));
     
-    ESP_LOGI(TAG, "Screen should be RED now! Wait 5 seconds...");
-    vTaskDelay(pdMS_TO_TICKS(5000));
+    ESP_LOGI(TAG, "Filling GREEN...");
+    lcd_fill(0x07E0);  // GREEN
+    vTaskDelay(pdMS_TO_TICKS(3000));
     
-    // Fill with GREEN
-    ESP_LOGI(TAG, "Filling screen with GREEN...");
-    fill_screen(0x07E0);
+    ESP_LOGI(TAG, "Filling BLUE...");
+    lcd_fill(0x001F);  // BLUE
+    vTaskDelay(pdMS_TO_TICKS(3000));
     
-    ESP_LOGI(TAG, "Screen should be GREEN now!");
+    ESP_LOGI(TAG, "=== TEST COMPLETE ===");
     
-    // Done - blink backlight
+    // Done
     while (1) {
-        gpio_set_level(DISPLAY_BL, 1);
-        vTaskDelay(pdMS_TO_TICKS(500));
-        gpio_set_level(DISPLAY_BL, 0);
-        vTaskDelay(pdMS_TO_TICKS(500));
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
