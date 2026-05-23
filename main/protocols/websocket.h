@@ -1,6 +1,6 @@
 /*
  * WebSocket Client for Bidin Hermes Plugin
- * Minimal implementation - only supports what we need
+ * Minimal implementation using esp_http_client with WebSocket transport
  */
 
 #ifndef WEBSOCKET_H
@@ -10,11 +10,9 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-// Audio frame structure (OPUS encoded)
-typedef struct {
-    uint8_t data[256];  // OPUS frame
-    size_t size;
-} audio_frame_t;
+// Forward reference - audio_frame_t is defined in audio.h
+// Include audio.h in websocket.c to get the actual definition
+struct audio_frame;
 
 // Initialize WebSocket client
 void websocket_init(void);
@@ -35,7 +33,7 @@ void websocket_send_hello(void);
 void websocket_send_audio_start(void);
 
 // Send audio frame
-void websocket_send_audio_frame(audio_frame_t *frame);
+void websocket_send_audio_frame(struct audio_frame *frame);
 
 // Send audio end (stop recording)
 void websocket_send_audio_end(void);
@@ -44,7 +42,7 @@ void websocket_send_audio_end(void);
 bool websocket_has_incoming_audio(void);
 
 // Read audio frame from server
-bool websocket_read_audio_frame(audio_frame_t *frame);
+bool websocket_read_audio_frame(struct audio_frame *frame);
 
 // Get server response text (after ASR)
 const char* websocket_get_response_text(void);

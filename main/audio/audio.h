@@ -8,10 +8,12 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
+// Audio frame structure (raw PCM samples)
 typedef struct {
-    int16_t samples[256];
-    size_t count;
+    int16_t samples[256];  // PCM samples
+    size_t count;          // Number of valid samples
 } audio_frame_t;
 
 // Initialize audio (I2S mic + speaker)
@@ -23,8 +25,8 @@ void audio_start_recording(void);
 // Stop recording
 void audio_stop_recording(void);
 
-// Read audio frame from mic
-audio_frame_t audio_read_frame(void);
+// Read audio frame from mic (fills the frame)
+void audio_read_frame(audio_frame_t *frame);
 
 // Play audio frame to speaker
 void audio_play_frame(audio_frame_t *frame);

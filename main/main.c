@@ -78,7 +78,8 @@ void app_main(void)
             
             // Record and stream audio until button released
             while (board_button_pressed()) {
-                audio_frame_t frame = audio_read_frame();
+                audio_frame_t frame;
+                audio_read_frame(&frame);
                 websocket_send_audio_frame(&frame);
                 vTaskDelay(pdMS_TO_TICKS(20)); // 50fps, 20ms frames
             }

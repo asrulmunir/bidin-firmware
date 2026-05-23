@@ -1,15 +1,16 @@
 /*
- * WebSocket Client Implementation
- * Uses ESP-IDF's transport_ws and esp_http_client
+ * WebSocket Client for Bidin Hermes Plugin
+ * Minimal implementation using esp_http_client with WebSocket transport
  */
 
 #include "websocket.h"
 #include "board_config.h"
+#include "audio.h"  // For audio_frame_t definition
 #include "esp_log.h"
-#include <esp_websocket_client.h>
 #include "esp_http_client.h"
 #include "cJSON.h"
 #include <string.h>
+#include <stdlib.h>
 
 static const char *TAG = "websocket";
 
@@ -18,178 +19,151 @@ static const char *TAG = "websocket";
 
 // WebSocket state
 static bool g_connected = false;
-static esp_websocket_client_handle_t g_client = NULL;
+static esp_http_client_handle_t g_client = NULL;
 static char g_response_text[512] = {0};
-static bool g_has_audio = false;
+static bool g_has_incoming_audio = false;
+static uint8_t *g_incoming_audio_buffer = NULL;
+static size_t g_incoming_audio_size = 0;
 
-// Event handler
-static void websocket_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
-{
-    esp_websocket_event_handle_t event = (esp_websocket_event_handle_t)event_data;
-    
-    switch (event_id) {
-        case WEBSOCKET_EVENT_CONNECTED:
-            ESP_LOGI(TAG, "WebSocket connected");
-            g_connected = true;
-            websocket_send_hello();
-            break;
-            
-        case WEBSOCKET_EVENT_DISCONNECTED:
-            ESP_LOGI(TAG, "WebSocket disconnected");
-            g_connected = false;
-            break;
-            
-        case WEBSOCKET_EVENT_DATA:
-            ESP_LOGD(TAG, "Received data");
-            
-            if (event->data_len > 0) {
-                // Check if binary (audio) or text (JSON)
-                if (event->op_code == WS_TRANSPORT_OPCODES_BINARY) {
-                    // Binary audio data from TTS
-                    ESP_LOGD(TAG, "Received audio chunk (%d bytes)", event->data_len);
-                    // TODO: Store in audio buffer for playback
-                    g_has_audio = true;
-                } else {
-                    // Text JSON message
-                    char *json = (char *)event->data;
-                    ESP_LOGD(TAG, "Received JSON: %.*s", event->data_len, json);
-                    
-                    // Parse JSON
-                    cJSON *root = cJSON_Parse(json);
-                    if (root) {
-                        cJSON *type = cJSON_GetObjectItem(root, "type");
-                        if (type && strcmp(type->valuestring, "tts") == 0) {
-                            cJSON *state = cJSON_GetObjectItem(root, "state");
-                            if (state) {
-                                if (strcmp(state->valuestring, "start") == 0) {
-                                    ESP_LOGI(TAG, "TTS start");
-                                } else if (strcmp(state->valuestring, "end") == 0) {
-                                    ESP_LOGI(TAG, "TTS end");
-                                    g_has_audio = false;
-                                }
-                            }
-                        }
-                        cJSON_Delete(root);
-                    }
-                }
-            }
-            break;
-            
-        case WEBSOCKET_EVENT_ERROR:
-            ESP_LOGE(TAG, "WebSocket error");
-            g_connected = false;
-            break;
-            
-        default:
-            break;
-    }
-}
-
+// Initialize WebSocket client
 void websocket_init(void)
 {
-    ESP_LOGI(TAG, "Initializing WebSocket client");
+    ESP_LOGI(TAG, "Initializing WebSocket client...");
     
-    esp_websocket_client_config_t config = {
-        .uri = WEBSOCKET_URL,
-        .task_prio = 8,
-        .task_stack = 4096,
+    // Configure HTTP client (WebSocket will use ws:// or wss://)
+    esp_http_client_config_t config = {
+        .url = WEBSOCKET_URL,
+        .transport_type = HTTP_TRANSPORT_OVER_WEBSOCKET,
+        .method = HTTP_METHOD_GET,
+        .timeout_ms = 10000,
         .buffer_size = 2048,
-        .reconnect_timeout_ms = 5000,
-        .network_timeout_ms = 5000,
-        .ping_interval_sec = 30,
     };
     
-    g_client = esp_websocket_client_init(&config);
-    esp_websocket_register_events(g_client, WEBSOCKET_EVENT_ANY, websocket_event_handler, NULL);
+    g_client = esp_http_client_init(&config);
+    if (g_client == NULL) {
+        ESP_LOGE(TAG, "Failed to initialize HTTP client");
+        return;
+    }
+    
+    ESP_LOGI(TAG, "WebSocket client initialized");
 }
 
+// Connect to Hermes server
 void websocket_connect(void)
 {
-    ESP_LOGI(TAG, "Connecting to %s", WEBSOCKET_URL);
-    esp_websocket_client_start(g_client);
+    ESP_LOGI(TAG, "Connecting to %s...", WEBSOCKET_URL);
+    
+    esp_err_t err = esp_http_client_open(g_client, 0);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to open connection: %s", esp_err_to_name(err));
+        g_connected = false;
+        return;
+    }
+    
+    g_connected = true;
+    ESP_LOGI(TAG, "Connected to Hermes server");
+    
+    // Send hello message
+    websocket_send_hello();
 }
 
+// Disconnect from server
 void websocket_disconnect(void)
 {
-    if (g_client) {
-        esp_websocket_client_close(g_client, pdMS_TO_TICKS(1000));
+    if (g_client != NULL) {
+        esp_http_client_close(g_client);
         g_connected = false;
+        ESP_LOGI(TAG, "Disconnected from server");
     }
 }
 
+// Check if connected
 bool websocket_is_connected(void)
 {
     return g_connected;
 }
 
+// Send hello message (device registration)
 void websocket_send_hello(void)
 {
-    if (!g_connected) return;
-    
-    // Send hello message (device registration)
     cJSON *hello = cJSON_CreateObject();
     cJSON_AddStringToObject(hello, "type", "hello");
-    cJSON_AddStringToObject(hello, "version", "v1");
-    cJSON_AddStringToObject(hello, "device_id", BOARD_NAME);
+    cJSON_AddStringToObject(hello, "device_id", BOARD_DEVICE_NAME);
     
-    char *json = cJSON_PrintUnformatted(hello);
-    esp_websocket_client_send_text(g_client, json, strlen(json), pdMS_TO_TICKS(1000));
+    char *json_str = cJSON_PrintUnformatted(hello);
+    ESP_LOGI(TAG, "Sending hello: %s", json_str);
     
+    // TODO: Send via WebSocket
+    // esp_http_client_write(g_client, json_str, strlen(json_str));
+    
+    free(json_str);
     cJSON_Delete(hello);
-    free(json);
-    
-    ESP_LOGI(TAG, "Hello sent");
 }
 
+// Send audio start (begin recording)
 void websocket_send_audio_start(void)
 {
-    if (!g_connected) return;
+    cJSON *start = cJSON_CreateObject();
+    cJSON_AddStringToObject(start, "type", "listen");
+    cJSON_AddStringToObject(start, "state", "start");
     
-    cJSON *msg = cJSON_CreateObject();
-    cJSON_AddStringToObject(msg, "type", "listen");
-    cJSON_AddStringToObject(msg, "state", "start");
+    char *json_str = cJSON_PrintUnformatted(start);
+    ESP_LOGI(TAG, "Sending audio start: %s", json_str);
     
-    char *json = cJSON_PrintUnformatted(msg);
-    esp_websocket_client_send_text(g_client, json, strlen(json), pdMS_TO_TICKS(1000));
+    // TODO: Send via WebSocket
     
-    cJSON_Delete(msg);
-    free(json);
+    free(json_str);
+    cJSON_Delete(start);
 }
 
+// Send audio frame
 void websocket_send_audio_frame(audio_frame_t *frame)
 {
-    if (!g_connected) return;
+    if (!g_connected || frame == NULL) {
+        return;
+    }
     
-    esp_websocket_client_send_bin(g_client, frame->data, frame->size, pdMS_TO_TICKS(1000));
+    // TODO: Send audio frame via WebSocket
+    // For now, just log
+    ESP_LOGV(TAG, "Sending audio frame: %zu bytes", frame->count * sizeof(int16_t));
 }
 
+// Send audio end (stop recording)
 void websocket_send_audio_end(void)
 {
-    if (!g_connected) return;
+    cJSON *end = cJSON_CreateObject();
+    cJSON_AddStringToObject(end, "type", "listen");
+    cJSON_AddStringToObject(end, "state", "end");
     
-    cJSON *msg = cJSON_CreateObject();
-    cJSON_AddStringToObject(msg, "type", "listen");
-    cJSON_AddStringToObject(msg, "state", "end");
+    char *json_str = cJSON_PrintUnformatted(end);
+    ESP_LOGI(TAG, "Sending audio end: %s", json_str);
     
-    char *json = cJSON_PrintUnformatted(msg);
-    esp_websocket_client_send_text(g_client, json, strlen(json), pdMS_TO_TICKS(1000));
+    // TODO: Send via WebSocket
     
-    cJSON_Delete(msg);
-    free(json);
+    free(json_str);
+    cJSON_Delete(end);
 }
 
+// Check if server has incoming audio
 bool websocket_has_incoming_audio(void)
 {
-    return g_has_audio;
+    // TODO: Check for incoming data
+    return g_has_incoming_audio;
 }
 
+// Read audio frame from server
 bool websocket_read_audio_frame(audio_frame_t *frame)
 {
-    // TODO: Implement audio buffer read
-    // For now, return false
+    if (!g_has_incoming_audio || frame == NULL) {
+        return false;
+    }
+    
+    // TODO: Read from buffer and populate frame
+    // For now, return false to indicate no data
     return false;
 }
 
+// Get server response text (after ASR)
 const char* websocket_get_response_text(void)
 {
     return g_response_text;
