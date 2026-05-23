@@ -384,19 +384,30 @@ void display_show_boot_screen(void)
     
     ESP_LOGI(TAG, "Showing boot screen");
     
-    // Clear to blue
+    // TEST 1: Fill with RED first (verify pixels working)
+    ESP_LOGI(TAG, "Filling screen with RED...");
+    display_fill(COLOR_RED);
+    vTaskDelay(pdMS_TO_TICKS(2000));  // Wait 2 seconds
+    
+    // TEST 2: Fill with GREEN
+    ESP_LOGI(TAG, "Filling screen with GREEN...");
+    display_fill(COLOR_GREEN);
+    vTaskDelay(pdMS_TO_TICKS(2000));
+    
+    // TEST 3: Fill with BLUE
+    ESP_LOGI(TAG, "Filling screen with BLUE...");
     display_fill(COLOR_BLUE);
+    vTaskDelay(pdMS_TO_TICKS(2000));
     
-    // White box for title
-    display_fill_rect(20, 80, 280, 60, COLOR_WHITE);
-    display_draw_rect(20, 80, 280, 60, COLOR_WHITE);
+    // TEST 4: Draw white rectangle
+    ESP_LOGI(TAG, "Drawing white rectangle...");
+    display_fill(COLOR_BLACK);
+    display_fill_rect(50, 50, 220, 140, COLOR_WHITE);
+    vTaskDelay(pdMS_TO_TICKS(2000));
     
-    // Title text
-    display_draw_string(60, 100, "Bidin", COLOR_BLUE);
-    display_draw_string(40, 120, "Voice Assistant", COLOR_BLUE);
-    
-    // Version
-    display_draw_string(120, 200, "v1.0.0", COLOR_WHITE);
+    // TEST 5: Draw text
+    ESP_LOGI(TAG, "Drawing text...");
+    display_draw_string(60, 110, "Bidin", COLOR_RED);
 }
 
 // Show listening screen
