@@ -6,17 +6,20 @@
 #ifndef BIDIN_BOARD_CONFIG_H
 #define BIDIN_BOARD_CONFIG_H
 
+#include <stdbool.h>
+#include <driver/gpio.h>
+
 // Board identification
 #define BOARD_NAME "bidin-firmware"
 #define BOARD_FIRMWARE_VERSION "1.0.0"
 #define BOARD_DISPLAY_TYPE "ST7789"
 #define BOARD_HAS_TOUCH
 
-// GPIO Pin Definitions
+// GPIO Pin Definitions (from official Freenove FNK0104B specs)
 // Display (SPI)
 #define DISPLAY_SPI_SCK_PIN     GPIO_NUM_47
 #define DISPLAY_SPI_MOSI_PIN    GPIO_NUM_48
-#define DISPLAY_SPI_CS_PIN      GPIO_NUM_49
+#define DISPLAY_SPI_CS_PIN      GPIO_NUM_49  // Note: Some boards use GPIO_49, check your schematic
 #define DISPLAY_DC_PIN          GPIO_NUM_45
 #define DISPLAY_RESET_PIN       GPIO_NUM_21
 #define DISPLAY_BACKLIGHT_PIN   GPIO_NUM_15
@@ -35,12 +38,12 @@
 
 // Speaker - I2S
 #define AUDIO_SPEAKER_BCLK_PIN  GPIO_NUM_16
-#define AUDIO_SPEAKER_LRCK_PIN  GPIO_NUM_15
+#define AUDIO_SPEAKER_LRCK_PIN  GPIO_NUM_15  // Shared with DISPLAY_BACKLIGHT_PIN
 #define AUDIO_SPEAKER_DATA_PIN  GPIO_NUM_14
 #define AUDIO_SPEAKER_MUTE_PIN  GPIO_NUM_22
 
 // Buttons
-#define BOARD_BUTTON_BOOT_PIN   GPIO_NUM_0      // BOOT button
+#define BOARD_BUTTON_BOOT_PIN   GPIO_NUM_0      // BOOT button (active low)
 #define BOARD_BUTTON_TOUCH_PIN  GPIO_NUM_21     // Touch sensor (if available)
 
 // I2C (for sensors, if any)

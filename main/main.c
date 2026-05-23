@@ -17,7 +17,7 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 
-#include "board.h"
+#include "board_config.h"
 #include "audio.h"
 #include "display.h"
 #include "websocket.h"

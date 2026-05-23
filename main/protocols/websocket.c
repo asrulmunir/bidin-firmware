@@ -6,6 +6,7 @@
 #include "websocket.h"
 #include "board_config.h"
 #include "esp_log.h"
+#include <esp_websocket_client.h>
 #include "esp_http_client.h"
 #include "cJSON.h"
 #include <string.h>
@@ -13,7 +14,7 @@
 static const char *TAG = "websocket";
 
 // Server configuration
-#define WEBSOCKET_URL CONFIG_Bidin_WEBSOCKET_URL
+#define WEBSOCKET_URL CONFIG_BIDIN_WEBSOCKET_URL
 
 // WebSocket state
 static bool g_connected = false;

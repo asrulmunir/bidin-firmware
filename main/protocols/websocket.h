@@ -1,6 +1,7 @@
-/*
- * WebSocket Client for Bidin Hermes Plugin
- * Minimal implementation - only supports what we need
+#include <stdint.h>
+#include <stddef.h>
+#include <stdbool.h>
+
  */
 
 #ifndef WEBSOCKET_H
