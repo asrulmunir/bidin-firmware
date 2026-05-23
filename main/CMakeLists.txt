@@ -1,23 +1,11 @@
 idf_component_register(
     SRCS
         "main.c"
-        "boards/freenove-esp32s3-2.8/board.c"
-        "protocols/websocket.c"
-        "audio/audio.c"
-        "display/display.c"
-        "network/wifi.c"
     INCLUDE_DIRS
         "."
-        "boards/freenove-esp32s3-2.8"
-        "protocols"
-        "audio"
-        "display"
-        "network"
     REQUIRES
         driver
-        esp_wifi
-        nvs_flash
-        json
-        esp_netif
         esp_http_client
+        freertos
+        nvs_flash
 )
