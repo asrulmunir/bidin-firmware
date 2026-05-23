@@ -1,110 +1,53 @@
 /*
- * Bidin Firmware - Minimal Voice Assistant
- * Main application entry point
- * 
- * Flow:
- * 1. Initialize hardware (display, audio, buttons)
- * 2. Connect to WiFi
- * 3. Connect to Hermes WebSocket server
- * 4. Listen for audio (push-to-talk or wake word)
- * 5. Stream audio to server, receive response, play back
+ * GPIO Toggle Test for Freenove Display
+ * This will manually toggle display pins to verify connection
  */
 
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "esp_system.h"
+#include "driver/gpio.h"
 #include "esp_log.h"
-#include "nvs_flash.h"
 
-#include "board_config.h"
-#include "audio.h"
-#include "display.h"
-#include "websocket.h"
-#include "wifi.h"
+static const char *TAG = "gpio_test";
 
-static const char *TAG = "bidin";
-
+// Test ALL possible pin combinations
 void app_main(void)
 {
-    // EARLIEST POSSIBLE LOG - verify we reach app_main
-    printf("### APP_MAIN STARTED ###\n");
-    fflush(stdout);
+    printf("=== GPIO TOGGLE TEST START ===\n");
     
-    ESP_LOGI(TAG, "Bidin Firmware v1.0.0 starting...");
+    // Test FNK0104B pins (most common)
+    const int test_pins[] = {39, 45, 46, 47, 48, 15};
+    const char *pin_names[] = {"CS", "DC", "RESET", "SCK", "MOSI", "BACKLIGHT"};
     
-    // Initialize NVS (non-volatile storage)
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_LOGW(TAG, "NVS partition truncated, erasing...");
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
+    printf("Testing FNK0104B pinout:\n");
     
-    // Initialize board (pins, peripherals)
-    ESP_LOGI(TAG, "Initializing board...");
-    board_init();
-    
-    // Initialize display
-    ESP_LOGI(TAG, "Initializing display...");
-    display_init();
-    display_show_boot_screen();
-    
-    // Initialize audio (I2S mic + speaker)
-    ESP_LOGI(TAG, "Initializing audio...");
-    audio_init();
-    
-    // Connect to WiFi
-    ESP_LOGI(TAG, "Connecting to WiFi...");
-    wifi_init();
-    wifi_connect();
-    
-    // Wait for WiFi connection
-    while (!wifi_is_connected()) {
-        vTaskDelay(pdMS_TO_TICKS(100));
+    for (int i = 0; i < 6; i++) {
+        int pin = test_pins[i];
+        printf("  Testing GPIO%d (%s)... ", pin, pin_names[i]);
+        
+        gpio_reset_pin(pin);
+        gpio_set_direction(pin, GPIO_MODE_OUTPUT);
+        
+        // Toggle 3 times
+        for (int j = 0; j < 3; j++) {
+            gpio_set_level(pin, 1);
+            vTaskDelay(pdMS_TO_TICKS(200));
+            gpio_set_level(pin, 0);
+            vTaskDelay(pdMS_TO_TICKS(200));
+        }
+        
+        printf("DONE (toggled 3x)\n");
     }
     
-    // Connect to Hermes WebSocket server
-    ESP_LOGI(TAG, "Connecting to Hermes server...");
-    websocket_init();
-    websocket_connect();
+    // Special test: Toggle backlight continuously
+    printf("\nBacklight test: GPIO15 will blink every 1 second\n");
+    printf("If screen lights up, backlight is working!\n");
     
-    // Main loop: handle audio streaming
-    ESP_LOGI(TAG, "Starting audio streaming loop...");
     while (1) {
-        // Check for button press (push-to-talk)
-        if (board_button_pressed()) {
-            ESP_LOGI(TAG, "Button pressed - start listening");
-            display_show_listening();
-            audio_start_recording();
-            websocket_send_audio_start();
-            
-            // Record and stream audio until button released
-            while (board_button_pressed()) {
-                audio_frame_t frame;
-                audio_read_frame(&frame);
-                websocket_send_audio_frame(&frame);
-                vTaskDelay(pdMS_TO_TICKS(20)); // 50fps, 20ms frames
-            }
-            
-            // Stop recording
-            audio_stop_recording();
-            websocket_send_audio_end();
-            display_show_processing();
-            
-            // Wait for response
-            ESP_LOGI(TAG, "Waiting for server response...");
-        }
-        
-        // Check for incoming audio from server
-        if (websocket_has_incoming_audio()) {
-            audio_frame_t frame;
-            while (websocket_read_audio_frame(&frame)) {
-                audio_play_frame(&frame);
-            }
-        }
-        
-        vTaskDelay(pdMS_TO_TICKS(10));
+        gpio_set_level(15, 1);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        gpio_set_level(15, 0);
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
