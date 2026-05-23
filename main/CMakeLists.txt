@@ -1,12 +1,15 @@
 idf_component_register(
     SRCS
         "main.c"
+        "display/display.c"
+        "boards/freenove-esp32s3-2.8/board.c"
     INCLUDE_DIRS
         "."
+        "display"
+        "boards/freenove-esp32s3-2.8"
     REQUIRES
         driver
         esp_lcd
-        esp_http_client
         freertos
         nvs_flash
 )

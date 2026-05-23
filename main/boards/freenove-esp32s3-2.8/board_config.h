@@ -1,85 +1,52 @@
-/*
- * Board Configuration for Bidin Firmware - Freenove ESP32-S3 Display 2.8"
- * Verified pinout - NO GPIO CONFLICTS
- */
+#ifndef _BOARD_CONFIG_H_
+#define _BOARD_CONFIG_H_
 
-#ifndef BIDIN_BOARD_CONFIG_H
-#define BIDIN_BOARD_CONFIG_H
-
-#include <stdbool.h>
 #include <driver/gpio.h>
 
-// Board identification
-#define BOARD_NAME "bidin-firmware"
-#define BOARD_FIRMWARE_VERSION "1.0.0"
-#define BOARD_DISPLAY_TYPE "ST7789"
-#define BOARD_HAS_TOUCH
+// Audio I2S
+#define AUDIO_INPUT_SAMPLE_RATE  24000
+#define AUDIO_OUTPUT_SAMPLE_RATE 24000
 
-// GPIO Pin Definitions - Official Freenove FNK0104B
-// NOTE: Some pins are shared between display and audio (hardware design)
-// - GPIO15: DISPLAY_BACKLIGHT + AUDIO_SPEAKER_LRCK
-// - GPIO47: DISPLAY_SPI_SCK + AUDIO_SPEAKER_MUTE
-// Solution: Initialize display first, keep speaker muted during display ops
+#define AUDIO_I2S_GPIO_MCLK      GPIO_NUM_4
+#define AUDIO_I2S_GPIO_BCLK      GPIO_NUM_5
+#define AUDIO_I2S_GPIO_DIN       GPIO_NUM_6
+#define AUDIO_I2S_GPIO_WS        GPIO_NUM_7
+#define AUDIO_I2S_GPIO_DOUT      GPIO_NUM_8
+#define AUDIO_CODEC_PA_PIN       GPIO_NUM_1
 
-// Display (SPI)
-#define DISPLAY_SPI_SCK_PIN     GPIO_NUM_47
-#define DISPLAY_SPI_MOSI_PIN    GPIO_NUM_48
-#define DISPLAY_SPI_CS_PIN      GPIO_NUM_39
-#define DISPLAY_DC_PIN          GPIO_NUM_45
-#define DISPLAY_RESET_PIN       GPIO_NUM_46  // CRITICAL: GPIO46, NOT GPIO21!
-#define DISPLAY_BACKLIGHT_PIN   GPIO_NUM_15  // Shared with speaker LRCK
+// Audio I2C
+#define AUDIO_CODEC_I2C_NUM      I2C_NUM_0
+#define AUDIO_CODEC_I2C_SCL_PIN  GPIO_NUM_15
+#define AUDIO_CODEC_I2C_SDA_PIN  GPIO_NUM_16
+#define AUDIO_CODEC_ES8311_ADDR  ES8311_CODEC_DEFAULT_ADDR
 
-// Touch (XPT2046 via SPI)
-#define TOUCH_SPI_SCK_PIN       DISPLAY_SPI_SCK_PIN  // Shared SCK OK
-#define TOUCH_SPI_MOSI_PIN      DISPLAY_SPI_MOSI_PIN  // Shared MOSI OK
-#define TOUCH_SPI_MISO_PIN      GPIO_NUM_40  // Touch MISO (input only)
-#define TOUCH_SPI_CS_PIN        GPIO_NUM_41  // Unique touch CS
-#define TOUCH_IRQ_PIN           GPIO_NUM_42  // Touch interrupt
+// Button & LED
+#define BOOT_BUTTON_GPIO GPIO_NUM_0
+#define BUILTIN_LED_GPIO GPIO_NUM_42
 
-// Audio (I2S)
-// Microphone - I2S PDM
-#define AUDIO_MIC_PDM_CLK_PIN   GPIO_NUM_17
-#define AUDIO_MIC_PDM_DATA_PIN  GPIO_NUM_18
+// Display (Freenove FNK0104B)
+#define DISPLAY_BACKLIGHT_PIN GPIO_NUM_45
+#define DISPLAY_RST_PIN       GPIO_NUM_NC
+#define DISPLAY_SCK_PIN       GPIO_NUM_12
+#define DISPLAY_DC_PIN        GPIO_NUM_46
+#define DISPLAY_CS_PIN        GPIO_NUM_10
+#define DISPLAY_MOSI_PIN      GPIO_NUM_11
+#define DISPLAY_MIS0_PIN      GPIO_NUM_13
+#define DISPLAY_SPI_SCLK_HZ   (20 * 1000 * 1000)
+#define LCD_SPI_HOST          SPI3_HOST
 
-// Speaker - I2S
-#define AUDIO_SPEAKER_BCLK_PIN  GPIO_NUM_16
-#define AUDIO_SPEAKER_LRCK_PIN  GPIO_NUM_15
-#define AUDIO_SPEAKER_DATA_PIN  GPIO_NUM_14
-#define AUDIO_SPEAKER_MUTE_PIN  GPIO_NUM_43  // Unique mute pin
+// Display settings
+#define LCD_TYPE_ILI9341_SERIAL
+#define DISPLAY_WIDTH         320
+#define DISPLAY_HEIGHT        240
+#define DISPLAY_MIRROR_X      false
+#define DISPLAY_MIRROR_Y      false
+#define DISPLAY_SWAP_XY       true
+#define DISPLAY_INVERT_COLOR  true
+#define DISPLAY_RGB_ORDER     LCD_RGB_ELEMENT_ORDER_BGR
+#define DISPLAY_OFFSET_X      0
+#define DISPLAY_OFFSET_Y      0
+#define DISPLAY_BACKLIGHT_OUTPUT_INVERT false
+#define DISPLAY_SPI_MODE      0
 
-// Board identification
-#define BOARD_DEVICE_NAME "Bidin-ESP32S3"
-#define BOARD_DEVICE_MODEL "Freenove-ESP32S3-2.8"
-#define BOARD_FIRMWARE_VERSION "1.0.0"
-
-// Buttons
-#define BOARD_BUTTON_BOOT_PIN   GPIO_NUM_0      // BOOT button (active low)
-
-// I2C (for sensors)
-#define I2C_SDA_PIN             GPIO_NUM_1
-#define I2C_SCL_PIN             GPIO_NUM_2
-
-// Audio Configuration
-#define AUDIO_SAMPLE_RATE       16000
-#define AUDIO_BITS_PER_SAMPLE   16
-#define AUDIO_CHANNELS          1
-
-// Display Configuration
-#define DISPLAY_WIDTH           320
-#define DISPLAY_HEIGHT          240
-#define DISPLAY_INVERT          true
-
-// Power Management
-#define BATTERY_ADC_PIN         GPIO_NUM_3      // Battery voltage monitoring
-#define BATTERY_ADC_ATTEN       ADC_ATTEN_DB_11
-
-// Board initialization function
-void board_init(void);
-
-// Button state
-bool board_button_pressed(void);
-
-// Battery level (0-100)
-int board_get_battery_level(void);
-
-#endif // BIDIN_BOARD_CONFIG_H
+#endif  // _BOARD_CONFIG_H_
