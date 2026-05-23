@@ -310,34 +310,69 @@ void display_draw_string(uint16_t x, uint16_t y, const char *str, uint16_t color
     }
 }
 
-// Draw rectangle
+// Draw rectangle - outline only (4 lines)
 void display_draw_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color)
 {
-    if (!g_initialized) return;
+    if (!g_initialized || w == 0 || h == 0) return;
     
-    // Top and bottom lines
-    for (uint16_t i = 0; i < w; i++) {
-        display_draw_pixel(x + i, y, color);
-        display_draw_pixel(x + i, y + h - 1, color);
-    }
+    // Draw top and bottom lines
+    display_fill_rect(x, y, w, 1, color);  // Top
+    display_fill_rect(x, y + h - 1, w, 1, color);  // Bottom
     
-    // Left and right lines
-    for (uint16_t i = 0; i < h; i++) {
-        display_draw_pixel(x, y + i, color);
-        display_draw_pixel(x + w - 1, y + i, color);
-    }
+    // Draw left and right lines
+    display_fill_rect(x, y, 1, h, color);  // Left
+    display_fill_rect(x + w - 1, y, 1, h, color);  // Right
 }
 
-// Fill rectangle
+// Fill rectangle - EFFICIENT bulk SPI transfer
 void display_fill_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color)
 {
-    if (!g_initialized) return;
+    if (!g_initialized || w == 0 || h == 0) return;
     
-    for (uint16_t i = 0; i < h; i++) {
-        for (uint16_t j = 0; j < w; j++) {
-            display_draw_pixel(x + j, y + i, color);
+    // Clamp to display bounds
+    if (x >= DISPLAY_WIDTH || y >= DISPLAY_HEIGHT) return;
+    if (x + w > DISPLAY_WIDTH) w = DISPLAY_WIDTH - x;
+    if (y + h > DISPLAY_HEIGHT) h = DISPLAY_HEIGHT - y;
+    
+    // Set cursor to rectangle start
+    display_set_cursor(x, y);
+    
+    gpio_set_level(DISPLAY_DC_PIN, 1);  // Data mode
+    gpio_set_level(DISPLAY_SPI_CS_PIN, 0);  // Select
+    
+    // Prepare buffer (max 256 pixels per transaction)
+    uint16_t buffer[256];
+    for (int i = 0; i < 256; i++) {
+        buffer[i] = color;
+    }
+    
+    // Send pixels row by row
+    int pixels_sent = 0;
+    int total_pixels = w * h;
+    
+    for (int row = 0; row < h; row++) {
+        for (int col = 0; col < w; col++) {
+            buffer[pixels_sent % 256] = color;
+            pixels_sent++;
+            
+            // Send when buffer full or end of rectangle
+            if (pixels_sent % 256 == 0 || pixels_sent == total_pixels) {
+                int count = (pixels_sent % 256 == 0) ? 256 : (pixels_sent % 256);
+                spi_transaction_t t = {
+                    .tx_buffer = buffer,
+                    .length = count * 16,  // count pixels * 16 bits
+                };
+                spi_device_polling_transmit(g_spi_handle, &t);
+                
+                // Yield every 10 transactions
+                if (pixels_sent % 2560 == 0) {
+                    vTaskDelay(pdMS_TO_TICKS(1));
+                }
+            }
         }
     }
+    
+    gpio_set_level(DISPLAY_SPI_CS_PIN, 1);  // Deselect
 }
 
 // Show boot screen
