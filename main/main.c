@@ -144,7 +144,8 @@ void app_main(void)
     
     // MADCTL: Your fork settings
     lcd_write_cmd(ILI9341_MADCTL);
-    lcd_write_data(0x20);  // Your fork: DISPLAY_SWAP_XY=true, RGB order
+    lcd_write_data(0x28);  // 0x20 (swap XY) + 0x08 (RGB order) = 0x28
+    // Was 0x20 (BGR), now 0x28 (RGB)
     
     // COLMOD: 16-bit
     lcd_write_cmd(ILI9341_COLMOD);
