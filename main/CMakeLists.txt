@@ -19,5 +19,5 @@ idf_component_register(
         nvs_flash
         json
         esp_netif
-        esp_http_client
+        esp_websocket_client
 )
