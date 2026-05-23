@@ -25,6 +25,24 @@
 #define COLOR_MAGENTA 0xF81F
 #define COLOR_GRAY    0x7BEF
 #define COLOR_ORANGE  0xFD20
+
+// Initialize display
+void display_init(void);
+
+// Fill screen with color
+void display_fill(uint16_t color);
+
+// Draw pixel at (x, y)
+void display_draw_pixel(uint16_t x, uint16_t y, uint16_t color);
+
+// Draw string
+void display_draw_string(uint16_t x, uint16_t y, const char *str, uint16_t color);
+
+// Draw rectangle
+void display_draw_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color);
+
+// Fill rectangle
+void display_fill_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color);
 // Show boot screen
 void display_show_boot_screen(void);
 

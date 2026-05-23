@@ -19,7 +19,7 @@
 // Display (SPI)
 #define DISPLAY_SPI_SCK_PIN     GPIO_NUM_47
 #define DISPLAY_SPI_MOSI_PIN    GPIO_NUM_48
-#define DISPLAY_SPI_CS_PIN      GPIO_NUM_49  // Note: Some boards use GPIO_49, check your schematic
+#define DISPLAY_SPI_CS_PIN      GPIO_NUM_46  // Note: GPIO_46 (GPIO_49 not available on ESP32-S3)
 #define DISPLAY_DC_PIN          GPIO_NUM_45
 #define DISPLAY_RESET_PIN       GPIO_NUM_21
 #define DISPLAY_BACKLIGHT_PIN   GPIO_NUM_15

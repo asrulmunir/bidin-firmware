@@ -150,7 +150,7 @@ void display_init(void)
     spi_bus_config_t bus_config = {
         .mosi_io_num = DISPLAY_SPI_MOSI_PIN,
         .miso_io_num = -1,  // Not used
-        .sclk_io_num = DISPLAY_SPI_CLK_PIN,
+        .sclk_io_num = DISPLAY_SPI_SCK_PIN,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
         .max_transfer_sz = DISPLAY_WIDTH * DISPLAY_HEIGHT * 2,
